@@ -84,9 +84,19 @@
         <div class="settings-profile"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="Profile"><div><strong id="me-name">heartYEAH:)</strong><small>Retro iOS 5.1 · Dream archive</small><span id="me-signature">A leaf that remains evergreen</span></div></div>
         <div class="me-section-title">PERSONAL DETAILS</div>
         <button class="setting-row" id="edit-profile"><span>Display name / 名字</span><span>›</span></button><button class="setting-row" id="edit-signature"><span>Signature / 个人签名</span><span>›</span></button>
-        <div class="me-section-title custom-heading">CUSTOM CARD LIBRARY <span id="custom-card-count">0</span></div>
-        <p class="me-helper">在这里添加你自己的随机回复。添加后会和内置字卡一起参与抽取。</p>
-        <form class="custom-card-form" id="custom-card-form"><textarea id="custom-card-input" rows="2" maxlength="180" placeholder="输入一句想收到的话……"></textarea><button class="small-blue-btn" type="submit">＋ Add card</button></form>
+        <div class="me-section-title custom-heading">CUSTOM CARD LIBRARY <span id="custom-card-count">0 / 0 active</span></div>
+        <p class="me-helper">字卡库初始为空，完全由你创建。只有已启用的字卡与分组会参与随机回复。</p>
+        <div class="card-global-controls"><button class="small-blue-btn" type="button" id="enable-all-cards">✓ 全选启用</button><button class="small-blue-btn secondary" type="button" id="disable-all-cards">⊘ 全选禁用</button></div>
+        <div class="card-subheading"><strong>分组管理 / Groups</strong><button class="small-blue-btn" type="button" id="create-card-group">＋ 新建分组</button></div>
+        <div class="card-group-list" id="card-group-list"></div>
+        <div class="card-subheading add-card-heading"><strong>添加字卡 / Add Cards</strong><span>一行一句 · 支持批量</span></div>
+        <form class="custom-card-form" id="custom-card-form">
+          <label class="card-field-label" for="custom-card-batch">字卡内容（每行一张）</label>
+          <textarea id="custom-card-batch" rows="4" maxlength="12000" placeholder="一行一句，可一次粘贴多张字卡……"></textarea>
+          <div class="card-form-footer"><label class="group-select-label" for="custom-card-group">加入分组<select id="custom-card-group"><option value="">不分组 / Ungrouped</option></select></label><button class="small-blue-btn" type="submit">＋ 批量添加</button></div>
+        </form>
+        <div class="card-import-row"><input id="card-file-input" type="file" accept=".txt,.csv,text/plain,text/csv" hidden><button class="small-blue-btn secondary" type="button" id="import-card-file">⇧ 导入 .TXT / .CSV</button><span>按行解析，自动跳过重复内容</span></div>
+        <div class="card-subheading"><strong>字卡列表 / Card Status</strong><span>单条开关可独立控制</span></div>
         <div class="custom-card-list" id="custom-card-list"></div>
         <div class="me-section-title custom-heading">DATA & SETTINGS</div>
         <button class="setting-row" id="export-data"><span>Export local data / 导出数据</span><span>JSON　›</span></button><button class="setting-row" id="reset-data"><span>Reset demo / 重置数据</span><span>›</span></button>

@@ -3,13 +3,6 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const STORAGE_KEY = "retroOtome_final_v3";
-  const BASE_CARDS = [
-    "你吃饭了吗？不许总吃外卖。", "你想干嘛？", "今晚月色很美，但我只看着你。",
-    "又在发呆了吗？把手伸过来。", "刚刚忽然很想听你的声音。", "无论多晚，我的讯号永远向你开放。",
-    "今天的疲惫，就暂存在我这里吧。", "我买了两张周末的电影票，要一起吗。", "笨蛋，天冷了怎么不多穿一件。",
-    "你不用每次都表现得很坚强。", "等雨停了，我们就去散步吧。", "晚安。要记得在梦里见我。",
-    "你现在是在想我吗？", "到家了告诉我。", "今天也有一点点想你。", "别躲，我看见你了。"
-  ];
   const CONTACTS = [
     { id: "heart", name: "hearty eah^", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces", time: "23:11", preview: "1", mood: "cute" },
     { id: "luna", name: "小月亮", avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=120&h=120&fit=crop&crop=faces", time: "01:31", preview: "[动画表情] 哎", mood: "soft" },
@@ -32,26 +25,40 @@
   const todayKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const clone = value => JSON.parse(JSON.stringify(value));
-  const freshState = () => {
-    const today = todayKey();
-    const sampleCards = ["今晚月色很美，但我只看着你。", "Its cold outta here"];
-    return {
-      profileName: "heartYEAH:)", signature: "A leaf that remains evergreen", customCards: [], collected: sampleCards,
-      messages: clone(DEFAULT_MESSAGES), previews: {}, notes: [],
-      savedItems: sampleCards.map((text, i) => ({ id: uid(), date: today, type: "card", title: "Collected card", text, createdAt: Date.now() + i })),
-      anniversaries: [
-        { id: "anniv-meet", title: "相识纪念日", date: "2026-05-14", note: "The day our story began." },
-        { id: "anniv-first", title: "第一次约会", date: "2026-06-01", note: "A tiny date worth remembering." }
-      ]
-    };
-  };
+  const freshState = () => ({
+    profileName: "heartYEAH:)", signature: "A leaf that remains evergreen",
+    // The card library intentionally starts empty: only user-created/imported cards can reply.
+    customCards: [], cardGroups: [], collected: [], messages: clone(DEFAULT_MESSAGES), previews: {}, notes: [],
+    savedItems: [],
+    anniversaries: [
+      { id: "anniv-meet", title: "相识纪念日", date: "2026-05-14", note: "The day our story began." },
+      { id: "anniv-first", title: "第一次约会", date: "2026-06-01", note: "A tiny date worth remembering." }
+    ]
+  });
   function loadState() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return freshState();
       const parsed = JSON.parse(saved);
       const base = freshState();
-      return { ...base, ...parsed, messages: { ...clone(DEFAULT_MESSAGES), ...(parsed.messages || {}) }, notes: Array.isArray(parsed.notes) ? parsed.notes : [], savedItems: Array.isArray(parsed.savedItems) ? parsed.savedItems : [], anniversaries: Array.isArray(parsed.anniversaries) ? parsed.anniversaries : [], collected: Array.isArray(parsed.collected) ? parsed.collected : [], customCards: Array.isArray(parsed.customCards) ? parsed.customCards : [] };
+      const cardGroups = (Array.isArray(parsed.cardGroups) ? parsed.cardGroups : []).map(group => ({
+        id: String(group.id || uid()), name: String(group.name || "未命名分组"), enabled: group.enabled !== false
+      }));
+      // Migrate older user-added string cards into the new managed-card format.
+      // Legacy built-in replies are not migrated; the built-in library has been removed.
+      const customCards = (Array.isArray(parsed.customCards) ? parsed.customCards : []).map(card => {
+        if (typeof card === "string") return { id: uid(), text: card.trim(), groupId: "", enabled: true, createdAt: Date.now() };
+        return { id: String(card.id || uid()), text: String(card.text || "").trim(), groupId: String(card.groupId || ""), enabled: card.enabled !== false, createdAt: card.createdAt || Date.now() };
+      }).filter(card => card.text).map(card => { if (card.groupId && !cardGroups.some(group => group.id === card.groupId)) card.groupId = ""; return card; });
+      return {
+        ...base, ...parsed,
+        messages: { ...clone(DEFAULT_MESSAGES), ...(parsed.messages || {}) },
+        notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+        savedItems: Array.isArray(parsed.savedItems) ? parsed.savedItems : [],
+        anniversaries: Array.isArray(parsed.anniversaries) ? parsed.anniversaries : [],
+        collected: Array.isArray(parsed.collected) ? parsed.collected : [],
+        customCards, cardGroups
+      };
     } catch (error) { console.warn("Saved data could not be read; loading defaults.", error); return freshState(); }
   }
   let state = loadState();
@@ -71,7 +78,10 @@
   function nowTime() { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
   function dateLabel(dateStr) { const d = new Date(`${dateStr}T12:00:00`); return Number.isNaN(d.getTime()) ? dateStr : `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`; }
   function currentContact() { return CONTACTS.find(c => c.id === activeContactId) || CONTACTS[0]; }
-  function allCards() { return [...BASE_CARDS, ...state.customCards]; }
+  function allCards() {
+    const enabledGroups = new Set(state.cardGroups.filter(group => group.enabled).map(group => group.id));
+    return state.customCards.filter(card => card.enabled && (!card.groupId || enabledGroups.has(card.groupId)));
+  }
   function showModal(title, message, symbol = "✦", options = {}) {
     $("#modal-title").textContent = title; $("#modal-text").textContent = message; $("#modal-symbol").textContent = symbol;
     $("#modal-extra").replaceChildren();
@@ -186,8 +196,16 @@
   }
   function receiveCard(contactId) {
     const pool = allCards();
-    const card = pool[Math.floor(Math.random() * pool.length)] || "你想干嘛？";
-    const message = { text: card, type: "received", time: nowTime() };
+    if (!pool.length) {
+      // Never silently fall back to a built-in phrase. The library is user-owned and may be empty/disabled.
+      if (activeTab === "message" && inChat && activeContactId === contactId) {
+        showModal("字卡库暂时没有可抽取内容", "请前往 Me 添加字卡，或启用至少一张字卡及其所属分组。", "✧");
+      }
+      return;
+    }
+    const chosen = pool[Math.floor(Math.random() * pool.length)];
+    const card = chosen.text;
+    const message = { text: card, type: "received", time: nowTime(), cardId: chosen.id };
     if (!state.messages[contactId]) state.messages[contactId] = [];
     state.messages[contactId].push(message); state.previews[contactId] = card;
     if (!state.collected.includes(card)) state.collected.unshift(card);
@@ -368,10 +386,181 @@
 
   function renderMe() {
     $("#me-name").textContent = state.profileName; $("#me-signature").textContent = state.signature;
-    $("#custom-card-count").textContent = state.customCards.length;
-    const list = $("#custom-card-list"); list.replaceChildren();
-    if (!state.customCards.length) { const empty = document.createElement("div"); empty.className = "empty-message"; empty.textContent = "自定义字卡暂时为空。添加后，聊天回复也可能抽到它。"; list.append(empty); return; }
-    state.customCards.forEach((card, index) => { const row = document.createElement("div"); row.className = "custom-card-item"; const text = document.createElement("span"); text.textContent = card; const del = document.createElement("button"); del.type = "button"; del.textContent = "×"; del.setAttribute("aria-label", "Delete card"); del.addEventListener("click", async () => { if (await showModal("Remove this card?", card, "!", { confirm: true, okText: "Remove" })) { state.customCards.splice(index, 1); saveState(); renderMe(); } }); row.append(text, del); list.append(row); });
+    const enabledCount = allCards().length;
+    $("#custom-card-count").textContent = `${state.customCards.length} / ${enabledCount} active`;
+    renderCardGroups();
+    renderManagedCards();
+    renderCardGroupSelect();
+    const batchInput = $("#custom-card-batch");
+    if (batchInput && !batchInput.value) batchInput.placeholder = "一行一句，可一次粘贴多张字卡……";
+  }
+
+  function isCardActive(card) {
+    if (!card.enabled) return false;
+    if (!card.groupId) return true;
+    const group = state.cardGroups.find(item => item.id === card.groupId);
+    return Boolean(group && group.enabled);
+  }
+
+  function renderCardGroupSelect() {
+    const select = $("#custom-card-group");
+    if (!select) return;
+    const prior = select.value;
+    select.replaceChildren();
+    const ungrouped = document.createElement("option"); ungrouped.value = ""; ungrouped.textContent = "不分组 / Ungrouped"; select.append(ungrouped);
+    state.cardGroups.forEach(group => {
+      const option = document.createElement("option"); option.value = group.id; option.textContent = `${group.name}${group.enabled ? "" : "（已禁用）"}`; select.append(option);
+    });
+    if ([...select.options].some(option => option.value === prior)) select.value = prior;
+  }
+
+  function renderCardGroups() {
+    const container = $("#card-group-list");
+    container.replaceChildren();
+    if (!state.cardGroups.length) {
+      const empty = document.createElement("div"); empty.className = "empty-message";
+      empty.textContent = "还没有分组。可以创建「日常」「吃醋」「问候」等分组，再将字卡归入其中。";
+      container.append(empty); return;
+    }
+    state.cardGroups.forEach(group => {
+      const cards = state.customCards.filter(card => card.groupId === group.id);
+      const row = document.createElement("div"); row.className = "card-group-row";
+      const main = document.createElement("div"); main.className = "card-group-main";
+      const name = document.createElement("strong"); name.textContent = group.name;
+      const count = document.createElement("small"); count.textContent = `${cards.length} 张字卡 · ${cards.filter(card => card.enabled).length} 张单条启用`;
+      main.append(name, count);
+      const switchLabel = document.createElement("label"); switchLabel.className = "retro-switch"; switchLabel.title = group.enabled ? "禁用此分组" : "启用此分组";
+      const toggle = document.createElement("input"); toggle.type = "checkbox"; toggle.checked = group.enabled; toggle.setAttribute("aria-label", `${group.name} 分组启用状态`);
+      toggle.addEventListener("change", () => {
+        group.enabled = toggle.checked;
+        // Group switch controls all cards in the group in one action.
+        state.customCards.filter(card => card.groupId === group.id).forEach(card => { card.enabled = toggle.checked; });
+        saveState(); renderMe();
+      });
+      const slider = document.createElement("span"); slider.className = "retro-slider"; switchLabel.append(toggle, slider);
+      const edit = document.createElement("button"); edit.type = "button"; edit.className = "tiny-metal-btn"; edit.textContent = "Edit"; edit.addEventListener("click", () => editCardGroup(group.id));
+      const del = document.createElement("button"); del.type = "button"; del.className = "tiny-metal-btn danger"; del.textContent = "×"; del.setAttribute("aria-label", `删除${group.name}分组`); del.addEventListener("click", () => deleteCardGroup(group.id));
+      row.append(main, switchLabel, edit, del); container.append(row);
+    });
+  }
+
+  function renderManagedCards() {
+    const container = $("#custom-card-list");
+    container.replaceChildren();
+    if (!state.customCards.length) {
+      const empty = document.createElement("div"); empty.className = "empty-message";
+      empty.textContent = "字卡库目前为空。添加或导入你自己的短句后，已启用的字卡才会参与随机回复。";
+      container.append(empty); return;
+    }
+    const sections = [{ id: "", name: "未分组 / Ungrouped" }, ...state.cardGroups.map(group => ({ id: group.id, name: group.name }))];
+    sections.forEach(section => {
+      const cards = state.customCards.filter(card => card.groupId === section.id || (section.id === "" && !card.groupId));
+      if (!cards.length) return;
+      const title = document.createElement("div"); title.className = "managed-group-label"; title.textContent = `${section.name} · ${cards.length}`; container.append(title);
+      cards.forEach(card => {
+        const row = document.createElement("div"); row.className = `custom-card-item${isCardActive(card) ? " is-active" : " is-inactive"}`;
+        const text = document.createElement("span"); text.className = "managed-card-text"; text.textContent = card.text;
+        const activeLabel = document.createElement("label"); activeLabel.className = "retro-switch card-switch"; activeLabel.title = "单条字卡启用状态";
+        const toggle = document.createElement("input"); toggle.type = "checkbox"; toggle.checked = card.enabled; toggle.setAttribute("aria-label", `启用字卡：${card.text}`);
+        toggle.addEventListener("change", () => { card.enabled = toggle.checked; saveState(); renderMe(); });
+        const slider = document.createElement("span"); slider.className = "retro-slider"; activeLabel.append(toggle, slider);
+        const edit = document.createElement("button"); edit.type = "button"; edit.className = "tiny-metal-btn"; edit.textContent = "Edit"; edit.addEventListener("click", () => editCard(card.id));
+        const del = document.createElement("button"); del.type = "button"; del.className = "tiny-metal-btn danger"; del.textContent = "×"; del.setAttribute("aria-label", "Delete card"); del.addEventListener("click", () => deleteCard(card.id));
+        row.append(text, activeLabel, edit, del); container.append(row);
+      });
+    });
+  }
+
+  async function addCardsFromText(text, groupId = "") {
+    const candidates = text.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+    if (!candidates.length) { showModal("没有发现字卡", "请先输入或粘贴内容，每行写一句字卡。", "✧"); return 0; }
+    const existing = new Set(state.customCards.map(card => card.text.toLocaleLowerCase()));
+    let added = 0; let skipped = 0;
+    candidates.forEach(value => {
+      if (existing.has(value.toLocaleLowerCase())) { skipped++; return; }
+      state.customCards.unshift({ id: uid(), text: value, groupId: state.cardGroups.some(group => group.id === groupId) ? groupId : "", enabled: true, createdAt: Date.now() });
+      existing.add(value.toLocaleLowerCase()); added++;
+    });
+    if (added) { saveState(); renderMe(); }
+    showModal(added ? "字卡已加入" : "没有新增字卡", `新增 ${added} 张${skipped ? `，跳过重复内容 ${skipped} 条` : ""}。已启用的字卡才会参与聊天随机回复。`, added ? "✓" : "✧");
+    return added;
+  }
+
+  function parseCSVRows(source) {
+    const rows = []; let row = []; let field = ""; let quoted = false;
+    for (let i = 0; i < source.length; i++) {
+      const ch = source[i];
+      if (ch === '"' && quoted && source[i + 1] === '"') { field += '"'; i++; }
+      else if (ch === '"') quoted = !quoted;
+      else if (ch === "," && !quoted) { row.push(field.trim()); field = ""; }
+      else if ((ch === "\n" || ch === "\r") && !quoted) {
+        if (ch === "\r" && source[i + 1] === "\n") i++;
+        row.push(field.trim()); if (row.some(Boolean)) rows.push(row); row = []; field = "";
+      } else field += ch;
+    }
+    row.push(field.trim()); if (row.some(Boolean)) rows.push(row);
+    return rows;
+  }
+
+  async function importCardFile(file) {
+    if (!file) return;
+    try {
+      const source = (await file.text()).replace(/^\uFEFF/, "");
+      let lines;
+      if (/\.csv$/i.test(file.name) || file.type.includes("csv")) {
+        const rows = parseCSVRows(source);
+        const header = (rows[0] || []).map(cell => cell.toLowerCase());
+        const cardColumn = header.findIndex(cell => /^(card|text|content|sentence|phrase|字卡|句子|内容|文案)$/.test(cell));
+        const hasHeader = cardColumn >= 0;
+        const column = hasHeader ? cardColumn : 0;
+        lines = rows.slice(hasHeader ? 1 : 0).map(row => row[column] || row.find(Boolean) || "");
+      } else lines = source.split(/\r?\n/);
+      await addCardsFromText(lines.join("\n"), $("#custom-card-group").value);
+    } catch (error) { showModal("导入失败", "无法读取这个文件。请使用 UTF-8 编码的 .txt 或 .csv 文件。", "!"); }
+    $("#card-file-input").value = "";
+  }
+
+  async function editCardGroup(groupId) {
+    const group = state.cardGroups.find(item => item.id === groupId); if (!group) return;
+    const pending = showModal("编辑字卡分组", "为这组字卡取一个容易辨认的名字。", "▤", { confirm: true, okText: "Save" });
+    const input = addModalField($("#modal-extra"), "分组名称", { value: group.name, required: true, maxLength: 40 });
+    if (!await pending) return;
+    const name = input.value.trim(); if (!name) { showModal("分组名称不能为空", "请输入一个分组名称。", "!"); return; }
+    if (state.cardGroups.some(item => item.id !== groupId && item.name.toLowerCase() === name.toLowerCase())) { showModal("分组已存在", "请使用一个不同的分组名称。", "!"); return; }
+    group.name = name; saveState(); renderMe();
+  }
+
+  async function createCardGroup() {
+    const pending = showModal("新建字卡分组", "例如：日常、吃醋、问候。", "▤", { confirm: true, okText: "Create" });
+    const input = addModalField($("#modal-extra"), "分组名称", { placeholder: "例如：日常", required: true, maxLength: 40 });
+    if (!await pending) return;
+    const name = input.value.trim(); if (!name) { showModal("分组名称不能为空", "请输入一个分组名称。", "!"); return; }
+    if (state.cardGroups.some(item => item.name.toLowerCase() === name.toLowerCase())) { showModal("分组已存在", "这个分组已经创建过了。", "!"); return; }
+    state.cardGroups.push({ id: uid(), name, enabled: true }); saveState(); renderMe();
+  }
+
+  async function deleteCardGroup(groupId) {
+    const group = state.cardGroups.find(item => item.id === groupId); if (!group) return;
+    if (!await showModal("删除这个分组？", `「${group.name}」中的字卡不会删除，而是移到未分组。`, "!", { confirm: true, okText: "Delete group" })) return;
+    state.customCards.filter(card => card.groupId === groupId).forEach(card => { card.groupId = ""; });
+    state.cardGroups = state.cardGroups.filter(item => item.id !== groupId); saveState(); renderMe();
+  }
+
+  async function editCard(cardId) {
+    const card = state.customCards.find(item => item.id === cardId); if (!card) return;
+    const pending = showModal("编辑字卡", "修改内容或调整它所属的分组。", "✎", { confirm: true, okText: "Save" });
+    const content = addModalField($("#modal-extra"), "字卡内容", { tag: "textarea", value: card.text, rows: 3, required: true, maxLength: 500 });
+    const groupField = addModalField($("#modal-extra"), "所属分组", { tag: "select", choices: [{ value: "", label: "不分组 / Ungrouped" }, ...state.cardGroups.map(group => ({ value: group.id, label: group.name }))], value: card.groupId });
+    if (!await pending) return;
+    const text = content.value.trim(); if (!text) { showModal("内容不能为空", "字卡内容不能为空。", "!"); return; }
+    if (state.customCards.some(item => item.id !== cardId && item.text.toLowerCase() === text.toLowerCase())) { showModal("重复字卡", "字卡库中已经有相同内容。", "!"); return; }
+    card.text = text; card.groupId = groupField.value; saveState(); renderMe();
+  }
+
+  async function deleteCard(cardId) {
+    const card = state.customCards.find(item => item.id === cardId); if (!card) return;
+    if (!await showModal("删除这张字卡？", card.text, "!", { confirm: true, okText: "Delete" })) return;
+    state.customCards = state.customCards.filter(item => item.id !== cardId); saveState(); renderMe();
   }
 
   function downloadJson() {
@@ -414,7 +603,23 @@
   $("#month-prev").addEventListener("click", () => { calendarMonth--; if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; } renderCalendar(); });
   $("#month-next").addEventListener("click", () => { calendarMonth++; if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; } renderCalendar(); });
   $("#add-anniversary").addEventListener("click", addAnniversary);
-  $("#custom-card-form").addEventListener("submit", event => { event.preventDefault(); const value = $("#custom-card-input").value.trim(); if (!value) return; if (state.customCards.includes(value) || BASE_CARDS.includes(value)) { showModal("Already in the deck", "这句话已经存在于字卡库中。", "✧"); return; } state.customCards.unshift(value); $("#custom-card-input").value = ""; saveState(); renderMe(); showModal("Card added", "你的自定义字卡已加入随机回复库。", "✓"); });
+  $("#custom-card-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const input = $("#custom-card-batch");
+    const added = await addCardsFromText(input.value, $("#custom-card-group").value);
+    if (added) input.value = "";
+  });
+  $("#create-card-group").addEventListener("click", createCardGroup);
+  $("#import-card-file").addEventListener("click", () => $("#card-file-input").click());
+  $("#card-file-input").addEventListener("change", event => importCardFile(event.target.files?.[0]));
+  $("#enable-all-cards").addEventListener("click", () => {
+    state.cardGroups.forEach(group => { group.enabled = true; }); state.customCards.forEach(card => { card.enabled = true; });
+    saveState(); renderMe(); showModal("全部已启用", "所有字卡及分组已开启，将参与随机回复。", "✓");
+  });
+  $("#disable-all-cards").addEventListener("click", () => {
+    state.cardGroups.forEach(group => { group.enabled = false; }); state.customCards.forEach(card => { card.enabled = false; });
+    saveState(); renderMe(); showModal("全部已禁用", "所有字卡及分组均已关闭；聊天将不会抽取默认短句。", "⊘");
+  });
   $("#edit-profile").addEventListener("click", () => { const name = window.prompt("新的显示名称：", state.profileName); if (name !== null && name.trim()) { state.profileName = name.trim(); $("#profile-name").textContent = state.profileName; saveState(); renderMe(); } });
   $("#edit-signature").addEventListener("click", () => { const signature = window.prompt("输入个人签名：", state.signature); if (signature !== null) { state.signature = signature.trim(); $("#profile-signature").textContent = state.signature; saveState(); renderMe(); } });
   $("#export-data").addEventListener("click", downloadJson);
