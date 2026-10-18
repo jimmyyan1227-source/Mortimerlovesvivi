@@ -84,3 +84,13 @@ retro-otome/
 - MiniMax 语音仍使用你自己填写的 MiniMax API Key。不要将密钥写入公开代码仓库。
 
 该项目作为静态网站使用时，不需要启动 `server.js`。如果不再使用旧的 DeepL 代理，可以从仓库中删除 `server.js` 和仅用于代理的 `package.json`。
+
+
+## 最新 UI 更新
+
+- 首页名片右上角可添加联系人，支持本地图片头像与角色名称。
+- 点击首页头像可从本地更换；头像压缩后保存在当前浏览器。
+- 首页四个导航词统一为 Memories / Often / Violently / Intrude。
+- 进入聊天详情后自动隐藏底部 Tab，返回列表或切换 Tab 后恢复。
+- 已移除网页内部模拟状态栏，并在窄屏布局中使用 `viewport-fit=cover` 与 `env(safe-area-inset-top/bottom)` 适配 iPhone 安全区域。
+- 手机布局依据实际可用视口自适应，适合 iPhone 17 Pro 尺寸；网页不能强制控制系统灵动岛的形状或让网页 UI 真正绘制到系统状态栏之下，显示效果仍取决于 Safari/PWA 模式。

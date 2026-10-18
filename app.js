@@ -3,7 +3,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const STORAGE_KEY = "retroOtome_final_v3";
-  const CONTACTS = [
+  let CONTACTS = [
     { id: "heart", name: "hearty eah^", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces", time: "23:11", preview: "1", mood: "cute" },
     { id: "luna", name: "小月亮", avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=120&h=120&fit=crop&crop=faces", time: "01:31", preview: "[动画表情] 哎", mood: "soft" },
     { id: "chen", name: "陆沉", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop&crop=faces", time: "23:53", preview: "Its cold outta here", mood: "all" },
@@ -26,7 +26,7 @@
   const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const clone = value => JSON.parse(JSON.stringify(value));
   const freshState = () => ({
-    profileName: "heartYEAH:)", signature: "A leaf that remains evergreen",
+    profileName: "heartYEAH:)", signature: "A leaf that remains evergreen", profileAvatar: "", customContacts: [],
     // The card library intentionally starts empty: only user-created/imported cards can reply.
     customCards: [], cardGroups: [], collected: [], messages: clone(DEFAULT_MESSAGES), previews: {}, notes: [],
     savedItems: [], pinnedContacts: [], hiddenContacts: [], deletedContacts: [], chatPreferences: {},
@@ -52,6 +52,7 @@
       }).filter(card => card.text).map(card => { if (card.groupId && !cardGroups.some(group => group.id === card.groupId)) card.groupId = ""; return card; });
       return {
         ...base, ...parsed,
+        customContacts: Array.isArray(parsed.customContacts) ? parsed.customContacts : [],
         messages: { ...clone(DEFAULT_MESSAGES), ...(parsed.messages || {}) },
         notes: Array.isArray(parsed.notes) ? parsed.notes : [],
         // Saved now contains only explicit manual message saves. Legacy auto-captured chat/note rows are excluded.
@@ -67,6 +68,7 @@
     } catch (error) { console.warn("Saved data could not be read; loading defaults.", error); return freshState(); }
   }
   let state = loadState();
+  CONTACTS = [...CONTACTS, ...(state.customContacts || []).filter(c => c && c.id && c.name)];
   let activeTab = "message";
   let inChat = false;
   let activeContactId = "heart";
@@ -155,6 +157,8 @@
     $$(".tab-item").forEach(button => button.classList.toggle("active", button.dataset.tab === activeTab));
     $("#back-btn").hidden = !(inChat || (activeTab === "notes" && !$("#note-editor").hidden));
     $("#top-action").hidden = false;
+    $(".tab-bar").hidden = activeTab === "message" && inChat;
+    $(".phone").classList.toggle("chat-immersive", activeTab === "message" && inChat);
     const titles = { message: inChat ? currentContact().name : "Message", notes: $("#note-editor").hidden ? "Notes" : "Note Editor", saved: "Saved", me: "Me" };
     $("#top-title").textContent = titles[activeTab];
     $("#top-action").textContent = activeTab === "message" && inChat ? "Edit" : activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : "＋ New") : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
@@ -1097,7 +1101,7 @@
   function downloadJson() {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json;charset=utf-8" }); const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "retro-otome-backup.json"; anchor.click(); URL.revokeObjectURL(url);
   }
-  function updateClock() { $("#status-time").textContent = nowTime(); }
+  function updateClock() {}
 
   $$(".tab-item").forEach(button => button.addEventListener("click", () => switchTab(button.dataset.tab)));
   $("#back-btn").addEventListener("click", () => { if (inChat) { inChat = false; renderLayout(); renderConversations(); } else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; renderLayout(); renderNotes(); } });
@@ -1160,6 +1164,58 @@
   $("#reset-data").addEventListener("click", async () => { if (await showModal("Reset local data?", "这会清除本浏览器中的 Notes、字卡、聊天记录和自定义纪念日。", "!", { confirm: true, okText: "Reset" })) { state = freshState(); saveState(); selectedDate = todayKey(); calendarYear = new Date().getFullYear(); calendarMonth = new Date().getMonth(); $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature; renderConversations(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderNotes(); switchTab("message"); showModal("Reset complete", "本地数据已恢复为初始 Demo 内容。", "✓"); } });
   $("#top-action").addEventListener("click", () => { if (activeTab === "message" && inChat) openChatPreferences(); else if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes") $("#new-note").click(); else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。", "✎"); });
 
-  $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature; updateClock(); window.setInterval(updateClock, 30000);
+  $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature;
+  if (state.profileAvatar) $("#profile-avatar").src = state.profileAvatar;
+
+  function readAvatarFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.type.startsWith("image/")) return reject(new Error("请选择图片文件。"));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("图片读取失败，请重试。"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("无法识别这张图片。"));
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const scale = Math.min(1, 360 / Math.max(img.naturalWidth, img.naturalHeight));
+          canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", .82));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  function chooseProfileAvatar() {
+    const input = document.createElement("input"); input.type = "file"; input.accept = "image/*";
+    input.addEventListener("change", async () => { if (!input.files?.[0]) return; try { state.profileAvatar = await readAvatarFile(input.files[0]); $("#profile-avatar").src = state.profileAvatar; saveState(); } catch (error) { showModal("头像设置失败", error.message, "!"); } });
+    input.click();
+  }
+  $("#profile-avatar").addEventListener("click", chooseProfileAvatar);
+  $("#profile-avatar").addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseProfileAvatar(); } });
+
+  function openAddContactModal() {
+    const overlay = document.createElement("div"); overlay.className = "modal-overlay contact-modal-overlay";
+    const card = document.createElement("form"); card.className = "modal-card contact-modal";
+    card.innerHTML = '<div class="modal-symbol">♙＋</div><h2>New Contact</h2><p>添加一位新的聊天联系人</p><label class="contact-avatar-picker"><img alt="头像预览" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces"><span>选择头像</span><input type="file" accept="image/*" hidden></label><label class="contact-name-label">角色名字<input class="contact-name-input" maxlength="40" placeholder="输入角色名字" required></label><div class="modal-buttons"><button class="chrome-btn contact-cancel" type="button">Cancel</button><button class="chrome-btn modal-ok" type="submit">Add Friend</button></div>';
+    overlay.append(card); $(".phone").append(overlay);
+    const fileInput = $("input[type=file]", card), preview = $(".contact-avatar-picker img", card), nameInput = $(".contact-name-input", card);
+    let avatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces";
+    fileInput.addEventListener("change", async () => { try { if (fileInput.files?.[0]) { avatar = await readAvatarFile(fileInput.files[0]); preview.src = avatar; } } catch (error) { showModal("头像设置失败", error.message, "!"); } });
+    $(".contact-avatar-picker", card).addEventListener("click", event => { if (event.target !== fileInput) fileInput.click(); });
+    $(".contact-cancel", card).addEventListener("click", () => overlay.remove());
+    overlay.addEventListener("click", event => { if (event.target === overlay) overlay.remove(); });
+    card.addEventListener("submit", event => {
+      event.preventDefault(); const name = nameInput.value.trim(); if (!name) return;
+      const contact = { id: `custom-${uid()}`, name, avatar, time: nowTime(), preview: "开始一段新的对话吧。", mood: "all", custom: true };
+      CONTACTS.push(contact); state.customContacts = [...(state.customContacts || []), contact];
+      state.messages[contact.id] = []; state.previews[contact.id] = contact.preview; saveState(); overlay.remove(); currentFilter = "all"; $$(".mood-chip").forEach(chip => chip.classList.toggle("active", chip.dataset.filter === "all")); renderConversations();
+      showModal("联系人已添加", `「${name}」已加入你的联系人列表。`, "✓");
+    });
+    nameInput.focus();
+  }
+  $("#add-contact-btn").addEventListener("click", openAddContactModal);
   renderConversations(); renderMessages(); renderNotes(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderLayout();
 })();

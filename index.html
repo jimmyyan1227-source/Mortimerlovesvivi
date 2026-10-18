@@ -11,16 +11,16 @@
 <body>
 <main class="stage">
   <section class="phone" aria-label="Retro Otome 应用">
-    <div class="status-bar"><span id="status-time">23:58</span><div class="status-icons"><span class="signal"><i></i><i></i><i></i><i></i></span><svg class="wifi" viewBox="0 0 20 15" aria-hidden="true"><path d="M1 4.5Q10 -2 19 4.5L10 14Z" fill="currentColor"/><path d="M5 8Q10 4 15 8L10 14Z" fill="#6d86a5"/></svg><span class="battery"><b>24</b></span></div></div>
     <header class="topbar"><button class="chrome-btn" id="back-btn" hidden>‹ Back</button><div class="top-title" id="top-title">Message</div><button class="chrome-btn" id="top-action">Edit</button></header>
     <div class="screen">
       <section class="page list-page" id="page-message">
         <article class="profile-card">
-          <img class="profile-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="Profile avatar">
+          <button class="add-contact-btn" id="add-contact-btn" type="button" aria-label="添加联系人" title="添加联系人"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3.2"/><path d="M2.8 19c.3-3.5 2.5-5.4 6.2-5.4 2.1 0 3.7.6 4.8 1.8M18 8v8M14 12h8"/></svg></button>
+          <img class="profile-avatar" id="profile-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="Profile avatar" role="button" tabindex="0" title="点击更换头像">
           <div class="profile-counts"><div><strong id="photo-count">8</strong><span>photos</span></div><div><strong id="follower-count">4</strong><span>followers</span></div><div><strong id="following-count">8</strong><span>following</span></div><button class="done-btn" id="profile-done">Done</button></div>
           <div class="profile-caption"><strong id="profile-name">heartYEAH:)</strong><span id="profile-signature">A leaf that remains evergreen</span></div>
         </article>
-        <div class="mood-strip" aria-label="Profile phrase buttons"><button class="mood-chip active" data-filter="all">Memories</button><button class="mood-chip" data-filter="cute">often</button><button class="mood-chip" data-filter="soft">violently</button><button class="mood-chip" data-filter="all">intrude</button></div>
+        <div class="mood-strip" aria-label="Profile phrase buttons"><button class="mood-chip active" data-filter="all">Memories</button><button class="mood-chip" data-filter="cute">Often</button><button class="mood-chip" data-filter="soft">Violently</button><button class="mood-chip" data-filter="all">Intrude</button></div>
         <div class="conversation-list" id="conversation-list" aria-label="Message conversations"></div>
       </section>
 

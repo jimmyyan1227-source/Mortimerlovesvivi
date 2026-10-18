@@ -218,3 +218,32 @@
 /* Dedicated DeepL connectivity test button */
 .deepl-test-btn{margin-top:9px;border-color:#9aafc5;background:linear-gradient(#fff 0%,#e7eef6 47%,#cbd9e8 50%,#f7faff 100%);color:#496887}
 .deepl-test-btn:disabled{opacity:.65;cursor:wait;filter:saturate(.65)}
+
+/* === Requested classic iOS / iPhone safe-area refinements === */
+.status-bar{display:none!important}
+@media(max-width:520px){
+  html,body{width:100%;height:100%;min-height:100%;overflow:hidden}
+  body{padding:0;background:var(--screen)}
+  .stage{width:100%;height:100dvh;min-height:100dvh;gap:0}
+  .phone{width:100%;height:100dvh;height:100svh;min-height:0;border:0;border-radius:0;box-shadow:none}
+  .topbar{padding-top:env(safe-area-inset-top);height:calc(58px + env(safe-area-inset-top));flex-basis:calc(58px + env(safe-area-inset-top));}
+  .screen{flex:1;min-height:0}
+  .tab-bar{padding-bottom:max(7px,env(safe-area-inset-bottom));}
+  .chat-immersive .topbar{padding-top:env(safe-area-inset-top)}
+}
+.profile-card{position:relative}
+.add-contact-btn{position:absolute;right:10px;top:10px;z-index:2;width:34px;height:34px;display:grid;place-items:center;border:1px solid #8ea3b8;border-radius:8px;color:#4f7294;background:linear-gradient(#fff 0%,#edf2f7 46%,#c8d6e4 51%,#e6edf5 100%);box-shadow:inset 0 1px 0 white,0 1px 3px #4c60772b}
+.add-contact-btn svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px white)}
+.profile-counts{padding-right:32px}
+.profile-avatar{cursor:pointer;transition:filter .15s}
+.profile-avatar:active{filter:brightness(.88)}
+.contact-modal{text-align:left;max-height:min(80dvh,560px);overflow-y:auto}
+.contact-modal .modal-symbol,.contact-modal h2,.contact-modal>p{text-align:center}
+.contact-avatar-picker{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0 16px;padding:12px;border:1px dashed #9fb0c3;border-radius:9px;background:linear-gradient(#f7fafc,#e2eaf3);color:#587594;font-size:12px;font-weight:700;cursor:pointer}
+.contact-avatar-picker img{width:58px;height:58px;object-fit:cover;border:2px solid white;border-radius:8px;box-shadow:0 1px 4px #7d8ea044}
+.contact-name-label{display:flex;flex-direction:column;gap:7px;color:#65778a;font-size:11px;font-weight:700;margin-bottom:17px}
+.contact-name-input{width:100%;height:38px;padding:0 10px;border:1px solid #aab9c9;border-radius:6px;background:linear-gradient(#fff,#f3f6f9);box-shadow:inset 0 1px 3px #53667a1f;color:#293847;outline-color:#7298bf;font-size:13px}
+.contact-modal .modal-buttons{margin-top:6px}
+.contact-modal .chrome-btn{font-size:11px;padding:8px 7px}
+.contact-modal-overlay{z-index:20}
+@media(max-width:520px){.contact-modal-overlay{padding:18px}.profile-card{padding-top:10px}.add-contact-btn{right:9px;top:9px}}
