@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#6d86a5">
+  <meta name="description" content="复古 iOS 短信风格的乙女字卡互动网页。">
+  <title>Retro Otome — 梦境收藏家</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="stage">
+    <section class="phone" aria-label="Retro Otome 应用预览">
+      <div class="status-bar">
+        <span id="status-time">23:58</span>
+        <div class="status-icons" aria-label="手机信号、电量">
+          <span class="signal"><i></i><i></i><i></i><i></i></span>
+          <svg class="wifi" viewBox="0 0 20 15" aria-hidden="true"><path d="M1 4.5Q10 -2 19 4.5L10 14Z" fill="currentColor"/><path d="M5 8Q10 4 15 8L10 14Z" fill="#6d86a5"/></svg>
+          <span class="battery"><b>24</b></span>
+        </div>
+      </div>
+      <header class="topbar">
+        <button class="chrome-btn back-btn" id="back-btn" hidden>‹ Messages</button>
+        <div class="top-title" id="top-title">Messages</div>
+        <button class="chrome-btn" id="top-action">Edit</button>
+      </header>
+
+      <div class="screen">
+        <section class="page list-page" id="page-list">
+          <article class="profile-card">
+            <img class="profile-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="个人头像">
+            <div class="profile-counts">
+              <div><strong id="photo-count">8</strong><span>photos</span></div>
+              <div><strong id="follower-count">4</strong><span>followers</span></div>
+              <div><strong id="following-count">8</strong><span>following</span></div>
+              <button class="done-btn" id="profile-done">Done</button>
+            </div>
+            <div class="profile-caption">
+              <strong>heartYEAH:)</strong>
+              <span>A leaf that remains evergreen</span>
+            </div>
+          </article>
+
+          <div class="mood-strip" aria-label="状态筛选">
+            <button class="mood-chip" data-filter="all">• ь -</button>
+            <button class="mood-chip" data-filter="cute">&gt; ^ &lt;</button>
+            <button class="mood-chip" data-filter="soft">• ᴥ •</button>
+            <button class="mood-chip active" data-filter="all">⌁ ᴗ -</button>
+          </div>
+
+          <div class="conversation-list" id="conversation-list" aria-label="聊天列表"></div>
+        </section>
+
+        <section class="page chat-page" id="page-chat" hidden>
+          <div class="action-bar">
+            <button class="action-btn" data-action="call"><span class="action-symbol">☎</span>Call</button>
+            <button class="action-btn" data-action="facetime"><span class="action-symbol">▣</span>FaceTime</button>
+            <button class="action-btn" data-action="contact"><span class="action-symbol">♙</span>Contact</button>
+          </div>
+          <div class="date-divider"><span>Today</span></div>
+          <div class="chat-messages" id="chat-messages" aria-live="polite"></div>
+          <form class="composer" id="composer">
+            <button class="camera-btn" type="button" id="camera-btn" aria-label="发送照片">◎</button>
+            <input id="message-input" type="text" autocomplete="off" placeholder="Send..." aria-label="输入消息">
+            <button class="send-btn" type="submit">Send</button>
+          </form>
+        </section>
+
+        <section class="page diary-page" id="page-diary" hidden>
+          <div class="section-heading"><span>✉</span><div><strong>字卡拼信笺</strong><small>collect little words, make a letter</small></div></div>
+          <textarea id="letter-box" class="letter-paper" placeholder="把收到的字卡拼成一封信……"></textarea>
+          <div class="diary-tools">
+            <button class="small-blue-btn" id="copy-letter">Copy letter</button>
+            <button class="small-blue-btn secondary" id="clear-letter">Clear</button>
+          </div>
+          <div class="deck-heading"><strong>已收集的字卡</strong><span id="collected-count">0 cards</span></div>
+          <p class="hint">点击任意字卡，即可添加到信纸中。</p>
+          <div class="card-tags" id="card-tags"></div>
+          <button class="draw-btn" id="draw-card">✦ 随机打捞一张字卡</button>
+        </section>
+
+        <section class="page collection-page" id="page-collection" hidden>
+          <div class="feature-panel">
+            <div class="feature-icon">✧</div>
+            <h2>字卡抽卡池</h2>
+            <p>Some words are little souvenirs.</p>
+            <div class="card-preview" id="draw-preview">“今晚月色很美，但我只看着你。”</div>
+            <button class="draw-btn" id="draw-card-main">✦ 抽取一张字卡</button>
+            <p class="hint">抽到的字卡会自动收进「拼字笺」。</p>
+          </div>
+          <h3 class="subheading">最近收集</h3>
+          <div id="recent-cards" class="recent-cards"></div>
+        </section>
+
+        <section class="page settings-page" id="page-settings" hidden>
+          <div class="settings-profile">
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="">
+            <div><strong>heartYEAH:)</strong><small>Retro iOS 5.1 · Dream archive</small></div>
+          </div>
+          <button class="setting-row" id="edit-signature"><span>个人签名</span><span>A leaf that remains evergreen　›</span></button>
+          <button class="setting-row" id="export-data"><span>导出字卡收藏</span><span>JSON　›</span></button>
+          <button class="setting-row" id="reset-data"><span>重置本地数据</span><span>›</span></button>
+          <p class="settings-note">所有聊天和字卡仅保存在当前浏览器中。此 Demo 不会连接真实电话、视频或支付服务。</p>
+        </section>
+      </div>
+
+      <nav class="tab-bar" aria-label="主导航">
+        <button class="tab-item active" data-tab="list"><span class="tab-icon">●</span><span>Messages</span></button>
+        <button class="tab-item" data-tab="diary"><span class="tab-icon">♙</span><span>Letters</span></button>
+        <button class="tab-item" data-tab="collection"><span class="tab-icon compass">◉</span><span>Cards</span><b class="tab-dot"></b></button>
+        <button class="tab-item" data-tab="settings"><span class="tab-icon">◐</span><span>Me</span></button>
+      </nav>
+
+      <div class="modal-overlay" id="modal" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-symbol" id="modal-symbol">✦</div>
+          <h2 id="modal-title">Notice</h2>
+          <p id="modal-text"></p>
+          <button class="done-btn modal-ok" id="modal-ok">Okay</button>
+        </div>
+      </div>
+      <input id="import-file" type="file" accept="application/json" hidden>
+    </section>
+    <p class="outside-caption">RETRO OTOME · A LITTLE ARCHIVE OF WORDS</p>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
