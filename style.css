@@ -113,3 +113,51 @@
 .card-switch input:checked+.retro-slider:before{transform:translateX(14px)}
 #custom-card-count{font-weight:700}
 @media(max-width:360px){.card-group-row{gap:4px;padding:7px 5px}.card-group-main strong{font-size:10px}.tiny-metal-btn{min-width:28px;padding:0 4px}.card-import-row{align-items:flex-start;flex-direction:column}}
+
+/* ===== Message list swipe actions: glossy classic iOS action wells ===== */
+.conversation-shell{position:relative;overflow:hidden;border-radius:24px;isolation:isolate;touch-action:pan-y}
+.conversation-actions{position:absolute;z-index:0;top:0;right:0;bottom:0;width:207px;display:flex;align-items:stretch;gap:3px;padding:4px 3px}
+.conversation-action{flex:1;min-width:0;padding:3px 1px;border:1px solid #8e9fb2;border-radius:7px;color:#fff;font-size:9px;font-weight:800;text-shadow:0 -1px 0 #43566a;box-shadow:inset 0 1px 0 #ffffffad,0 1px 2px #25384b35;background:linear-gradient(#9bb7d2 0%,#6c8dad 48%,#507393 51%,#7192b2 100%)}
+.conversation-action.pin-action{background:linear-gradient(#93bbdc,#477ba8 50%,#38658c)}
+.conversation-action.hide-action{background:linear-gradient(#c3cbd3,#8d9aaa 50%,#758394);border-color:#8997a7}
+.conversation-action.delete-action{background:linear-gradient(#e2aaa8,#c45e5b 50%,#a94343);border-color:#ad5c5c}
+.conversation{position:relative;z-index:1;transform:translateX(0);transition:transform .22s ease;touch-action:pan-y;will-change:transform}
+.conversation-shell.swiped .conversation{transform:translateX(-207px)}
+.conversation-shell.is-pinned .conversation{border-color:#9fb7ce}
+.conversation-shell.is-hidden-contact .conversation{opacity:.72}
+
+/* ===== Long-press message menu and multi-select toolbar ===== */
+.message{position:relative;user-select:none;-webkit-user-select:none}
+.message.selecting{margin-left:25px;max-width:calc(84% - 25px)}
+.message.sent.selecting{margin-left:0;margin-right:25px}
+.message-select-check{position:absolute;left:-25px;top:calc(50% - 10px);width:18px;height:18px;padding:0;display:grid;place-items:center;border:1px solid #9aabba;border-radius:5px;color:#fff;font-size:12px;font-weight:900;background:linear-gradient(#fff 0%,#e5ebf2 47%,#c6d2df 51%,#e4ebf2 100%);box-shadow:inset 0 1px 0 white,0 1px 2px #24384a30;text-shadow:0 -1px 0 #436581;z-index:2}
+.message-select-check:empty{color:transparent}
+.message.selecting.sent .message-select-check{left:auto;right:-25px}
+.message.selected-message .bubble,.message.selected-message .special-card{outline:2px solid #6d96bc;outline-offset:2px;box-shadow:0 0 0 3px #b8d0e6aa,inset 0 1px 0 #ffffffb3,0 2px 4px #3b536c2b}
+.selection-toolbar{flex:0 0 auto;padding:9px 10px 10px;border-top:1px solid #a8b7c7;background:linear-gradient(#f7f9fb 0%,#dce5ef 50%,#c6d1de 100%);box-shadow:inset 0 1px 0 white,0 -2px 5px #53677c1c}
+.selection-toolbar-top{display:flex;justify-content:space-between;align-items:center;color:#5e7388;font-size:11px;margin-bottom:8px}
+.selection-toolbar-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:8px}
+.selection-toolbar-actions .small-blue-btn{min-height:35px;padding:7px 8px}
+.selection-toolbar button:disabled{opacity:.45;filter:grayscale(.35)}
+.danger-action{border-color:#a96b6b;background:linear-gradient(#e6b6b5,#bd6563 48%,#a84d4b 51%,#c77977);text-shadow:0 -1px #8f4d4c}
+.context-menu-open{align-items:end!important;padding:12px!important}
+.context-menu-open .modal-card{width:min(100%,360px);border-radius:15px 15px 10px 10px;padding:18px 15px 12px;animation:menu-rise .18s ease-out}
+.context-menu-open .modal-symbol{font-size:22px}
+.context-menu-open .modal-card p{margin-bottom:12px}
+.context-menu-open .modal-extra{gap:6px}
+.message-menu-action{width:100%;min-height:39px;padding:8px 11px;text-align:left;border:1px solid #b3c2d1;border-radius:7px;color:#4b647c;font-size:12px;font-weight:800;background:linear-gradient(#fff 0%,#f0f4f8 48%,#dfe7f0 51%,#edf2f7 100%);box-shadow:inset 0 1px 0 white,0 1px 2px #30465a1c}
+.message-menu-action:active{filter:brightness(.94);transform:translateY(1px)}
+@keyframes menu-rise{from{transform:translateY(12px);opacity:.65}to{transform:translateY(0);opacity:1}}
+
+/* Saved manual favourites: distinct single line and merged conversation records */
+.saved-item{position:relative;padding-right:31px}
+.saved-remove{position:absolute;right:7px;top:7px;width:20px;height:20px;border:1px solid #bac7d4;border-radius:50%;color:#8c9baa;font-size:15px;line-height:16px;background:linear-gradient(#fff,#dfe7ef);box-shadow:inset 0 1px 0 white}
+.saved-group-chat{border-color:#aebfd0;background:linear-gradient(#fbfdff,#e8eff6)}
+.saved-chat-lines{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.saved-chat-line{display:grid;grid-template-columns:minmax(58px,auto) 1fr auto;align-items:start;gap:7px;padding:7px 8px;border:1px solid #c5d2df;border-radius:7px;background:linear-gradient(#fff,#f0f4f8);font-size:10px;line-height:1.45;box-shadow:inset 0 1px 0 white}
+.saved-chat-line b{color:#72869a;font-size:9px;overflow-wrap:anywhere}
+.saved-chat-line span{color:#4e6071;overflow-wrap:anywhere;white-space:pre-wrap}
+.saved-chat-line small{color:#9aa6b2;font-size:8px}
+.saved-line-sent{border-color:#afc7dc;background:linear-gradient(#f6fbff,#dcecf8)}
+.saved-line-received{background:linear-gradient(#fff,#f0f2f5)}
+@media(max-width:390px){.conversation-actions{width:195px}.conversation-shell.swiped .conversation{transform:translateX(-195px)}.conversation-action{font-size:8px}.message.selecting{max-width:calc(84% - 23px);margin-left:23px}.message.sent.selecting{margin-left:0;margin-right:23px}.message-select-check{left:-23px}.message.selecting.sent .message-select-check{right:-23px}.saved-chat-line{grid-template-columns:54px 1fr;gap:4px}.saved-chat-line small{grid-column:2}}

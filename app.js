@@ -29,7 +29,7 @@
     profileName: "heartYEAH:)", signature: "A leaf that remains evergreen",
     // The card library intentionally starts empty: only user-created/imported cards can reply.
     customCards: [], cardGroups: [], collected: [], messages: clone(DEFAULT_MESSAGES), previews: {}, notes: [],
-    savedItems: [],
+    savedItems: [], pinnedContacts: [], hiddenContacts: [], deletedContacts: [],
     anniversaries: [
       { id: "anniv-meet", title: "相识纪念日", date: "2026-05-14", note: "The day our story began." },
       { id: "anniv-first", title: "第一次约会", date: "2026-06-01", note: "A tiny date worth remembering." }
@@ -54,7 +54,11 @@
         ...base, ...parsed,
         messages: { ...clone(DEFAULT_MESSAGES), ...(parsed.messages || {}) },
         notes: Array.isArray(parsed.notes) ? parsed.notes : [],
-        savedItems: Array.isArray(parsed.savedItems) ? parsed.savedItems : [],
+        // Saved now contains only explicit manual message saves. Legacy auto-captured chat/note rows are excluded.
+        savedItems: Array.isArray(parsed.savedItems) ? parsed.savedItems.filter(item => ["single-message", "group-chat"].includes(item.type)) : [],
+        pinnedContacts: Array.isArray(parsed.pinnedContacts) ? parsed.pinnedContacts : [],
+        hiddenContacts: Array.isArray(parsed.hiddenContacts) ? parsed.hiddenContacts : [],
+        deletedContacts: Array.isArray(parsed.deletedContacts) ? parsed.deletedContacts : [],
         anniversaries: Array.isArray(parsed.anniversaries) ? parsed.anniversaries : [],
         collected: Array.isArray(parsed.collected) ? parsed.collected : [],
         customCards, cardGroups
@@ -73,6 +77,13 @@
   let calendarMonth = now.getMonth();
   let selectedDate = todayKey();
   let modalResolver = null;
+  let showHiddenContacts = false;
+  let selectionMode = false;
+  const selectedMessageIds = new Set();
+  let longPressTimer = null;
+  let pressStart = null;
+  let suppressMessageClickUntil = 0;
+  let openMessageMenuId = null;
 
   function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (error) { console.warn("Local storage could not be written.", error); } }
   function nowTime() { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
@@ -87,10 +98,11 @@
     $("#modal-extra").replaceChildren();
     $("#modal-cancel").hidden = !options.confirm; $("#modal-ok").hidden = false;
     $("#modal-ok").textContent = options.okText || (options.confirm ? "Confirm" : "Okay");
+    $("#modal").classList.toggle("context-menu-open", Boolean(options.menu));
     $("#modal").hidden = false;
     return new Promise(resolve => { modalResolver = resolve; });
   }
-  function closeModal(result = false) { $("#modal").hidden = true; if (modalResolver) { modalResolver(result); modalResolver = null; } }
+  function closeModal(result = false) { $("#modal").hidden = true; $("#modal").classList.remove("context-menu-open"); openMessageMenuId = null; if (modalResolver) { modalResolver(result); modalResolver = null; } }
 
   function renderLayout() {
     if (!(activeTab === "message" && inChat)) { $("#extension-panel").hidden = true; $("#sticker-tray").hidden = true; }
@@ -105,10 +117,10 @@
     $("#top-action").hidden = activeTab === "message" && inChat;
     const titles = { message: inChat ? currentContact().name : "Message", notes: $("#note-editor").hidden ? "Notes" : "Note Editor", saved: "Saved", me: "Me" };
     $("#top-title").textContent = titles[activeTab];
-    $("#top-action").textContent = activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : "＋ New") : activeTab === "saved" ? "+ Date" : "Edit";
+    $("#top-action").textContent = activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : "＋ New") : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
   }
   function switchTab(tab) {
-    activeTab = tab; inChat = false;
+    activeTab = tab; inChat = false; endSelectionMode();
     if (tab === "notes") { $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; }
     renderLayout();
     if (tab === "message") renderConversations();
@@ -116,29 +128,87 @@
     if (tab === "saved") { renderCalendar(); renderSavedDay(); renderAnniversaries(); }
     if (tab === "me") renderMe();
   }
-  function openChat(id) { activeContactId = id; inChat = true; activeTab = "message"; renderLayout(); renderMessages(); }
+  function openChat(id) { activeContactId = id; inChat = true; activeTab = "message"; endSelectionMode(); renderLayout(); renderMessages(); }
 
   function renderConversations() {
     const list = $("#conversation-list"); list.replaceChildren();
-    CONTACTS.filter(contact => currentFilter === "all" || contact.mood === currentFilter || contact.mood === "all").forEach(contact => {
-      const button = document.createElement("button"); button.type = "button"; button.className = "conversation"; button.addEventListener("click", () => openChat(contact.id));
+    const contacts = CONTACTS.filter(contact => !state.deletedContacts.includes(contact.id))
+      .filter(contact => showHiddenContacts || !state.hiddenContacts.includes(contact.id))
+      .filter(contact => currentFilter === "all" || contact.mood === currentFilter || contact.mood === "all")
+      .sort((a, b) => Number(state.pinnedContacts.includes(b.id)) - Number(state.pinnedContacts.includes(a.id)));
+    if (!contacts.length) {
+      const empty = document.createElement("div"); empty.className = "empty-message";
+      empty.textContent = showHiddenContacts ? "没有隐藏的会话。" : "这里暂时没有会话。"; list.append(empty); return;
+    }
+    contacts.forEach(contact => {
+      const shell = document.createElement("div"); shell.className = "conversation-shell";
+      if (state.pinnedContacts.includes(contact.id)) shell.classList.add("is-pinned");
+      if (state.hiddenContacts.includes(contact.id)) shell.classList.add("is-hidden-contact");
+      const actions = document.createElement("div"); actions.className = "conversation-actions";
+      const makeAction = (label, cls, fn) => {
+        const button = document.createElement("button"); button.type = "button"; button.className = `conversation-action ${cls || ""}`; button.textContent = label;
+        button.addEventListener("click", event => { event.stopPropagation(); fn(shell, contact); }); actions.append(button);
+      };
+      makeAction(state.pinnedContacts.includes(contact.id) ? "Unpin" : "Pin", "pin-action", () => {
+        state.pinnedContacts = state.pinnedContacts.includes(contact.id) ? state.pinnedContacts.filter(id => id !== contact.id) : [...state.pinnedContacts, contact.id];
+        saveState(); renderConversations();
+      });
+      makeAction(state.hiddenContacts.includes(contact.id) ? "Restore" : "Hide", "hide-action", () => {
+        state.hiddenContacts = state.hiddenContacts.includes(contact.id) ? state.hiddenContacts.filter(id => id !== contact.id) : [...state.hiddenContacts, contact.id];
+        showHiddenContacts = false; saveState(); renderConversations(); renderLayout();
+      });
+      makeAction("Delete", "delete-action", async () => {
+        if (!await showModal("删除这段会话？", `「${contact.name}」的聊天列表和本地对话记录将被删除。已手动收藏到 Saved 的记录会保留。`, "!", { confirm: true, okText: "Delete" })) return;
+        state.deletedContacts = [...new Set([...state.deletedContacts, contact.id])];
+        state.hiddenContacts = state.hiddenContacts.filter(id => id !== contact.id); state.pinnedContacts = state.pinnedContacts.filter(id => id !== contact.id);
+        delete state.messages[contact.id]; delete state.previews[contact.id]; saveState(); renderConversations();
+      });
+      const button = document.createElement("button"); button.type = "button"; button.className = "conversation";
       const img = document.createElement("img"); img.src = contact.avatar; img.alt = "";
       const copy = document.createElement("div"); copy.className = "convo-copy";
       const head = document.createElement("div"); head.className = "convo-head";
-      const name = document.createElement("span"); name.className = "convo-name"; name.textContent = contact.name;
+      const name = document.createElement("span"); name.className = "convo-name"; name.textContent = `${state.pinnedContacts.includes(contact.id) ? "◆ " : ""}${contact.name}`;
       const time = document.createElement("span"); time.className = "convo-time"; time.textContent = contact.time;
       const preview = document.createElement("div"); preview.className = "convo-preview"; preview.textContent = state.previews[contact.id] || contact.preview;
-      head.append(name, time); copy.append(head, preview); button.append(img, copy); list.append(button);
+      head.append(name, time); copy.append(head, preview); button.append(img, copy); shell.append(actions, button); list.append(shell);
+      let startX = 0, startY = 0, moved = false, ignoreClick = false;
+      button.addEventListener("pointerdown", event => { startX = event.clientX; startY = event.clientY; moved = false; ignoreClick = false; });
+      button.addEventListener("pointerup", event => {
+        const dx = event.clientX - startX, dy = event.clientY - startY;
+        if (Math.abs(dx) > 38 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+          moved = true; ignoreClick = true;
+          if (dx < 0) { $$(".conversation-shell.swiped", list).forEach(node => node.classList.remove("swiped")); shell.classList.add("swiped"); }
+          else shell.classList.remove("swiped");
+        }
+      });
+      button.addEventListener("click", event => { if (ignoreClick || moved) { event.preventDefault(); event.stopPropagation(); ignoreClick = false; moved = false; return; } $$(".conversation-shell.swiped", list).forEach(node => { if (node !== shell) node.classList.remove("swiped"); }); openChat(contact.id); });
+      button.addEventListener("contextmenu", event => { event.preventDefault(); shell.classList.toggle("swiped"); });
     });
   }
   function renderMessages() {
-    const container = $("#chat-messages"); container.replaceChildren();
-    (state.messages[activeContactId] || []).forEach(message => appendMessageElement(container, message));
-    container.scrollTop = container.scrollHeight;
+    const container = $("#chat-messages");
+    const previousScrollTop = container.scrollTop;
+    const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 35;
+    container.replaceChildren();
+    const messages = state.messages[activeContactId] || [];
+    let migrated = false;
+    messages.forEach(message => { if (!message.id) { message.id = uid(); migrated = true; } appendMessageElement(container, message); });
+    if (migrated) saveState();
+    container.scrollTop = wasAtBottom ? container.scrollHeight : previousScrollTop;
     $("#top-title").textContent = currentContact().name;
+    renderSelectionToolbar();
   }
   function appendMessageElement(container, message) {
     const group = document.createElement("div"); group.className = `message ${message.type === "sent" ? "sent" : "received"}`;
+    group.dataset.messageId = message.id;
+    if (selectionMode) {
+      group.classList.add("selecting");
+      if (selectedMessageIds.has(message.id)) group.classList.add("selected-message");
+      const check = document.createElement("button"); check.type = "button"; check.className = "message-select-check"; check.setAttribute("aria-label", "选择这条消息"); check.textContent = selectedMessageIds.has(message.id) ? "✓" : "";
+      check.addEventListener("click", event => { event.stopPropagation(); toggleSelectedMessage(message.id); });
+      group.append(check);
+    }
+    attachMessageGesture(group, message.id);
     if (message.kind === "poll") {
       const card = document.createElement("article"); card.className = "special-card poll-card";
       const kicker = document.createElement("div"); kicker.className = "special-kicker"; kicker.textContent = "✦ QUICK QUESTION";
@@ -190,9 +260,107 @@
     const meta = document.createElement("div"); meta.className = "message-meta"; meta.textContent = `${message.time || nowTime()} ${message.type === "sent" ? "Delivered" : "Read"}`;
     group.append(meta); container.append(group);
   }
-  function saveMemoryItem(type, title, text, date = todayKey()) {
-    state.savedItems.unshift({ id: uid(), date, type, title, text, createdAt: Date.now() });
-    saveState();
+  function renderSelectionToolbar() {
+    const toolbar = $("#selection-toolbar");
+    toolbar.hidden = !selectionMode;
+    $("#composer").hidden = selectionMode;
+    if (selectionMode) {
+      $("#extension-panel").hidden = true; $("#sticker-tray").hidden = true;
+      $("#selection-count").textContent = `${selectedMessageIds.size} selected`;
+      $("#save-selected-group").disabled = selectedMessageIds.size === 0;
+      $("#delete-selected").disabled = selectedMessageIds.size === 0;
+    }
+  }
+  function endSelectionMode() {
+    selectionMode = false; selectedMessageIds.clear();
+    if ($("#selection-toolbar")) renderSelectionToolbar();
+  }
+  function toggleSelectedMessage(messageId) {
+    if (selectedMessageIds.has(messageId)) selectedMessageIds.delete(messageId); else selectedMessageIds.add(messageId);
+    renderMessages();
+    $("#selection-count").textContent = `${selectedMessageIds.size} selected`;
+  }
+  function startSelectionMode(messageId = null) {
+    selectionMode = true; selectedMessageIds.clear(); if (messageId) selectedMessageIds.add(messageId);
+    renderMessages();
+  }
+  function messageToReadable(message) {
+    if (!message) return "";
+    if (message.kind === "poll") return `互动问卷：${message.poll?.question || ""}\n${(message.poll?.options || []).map((option, index) => `${String.fromCharCode(65 + index)}. ${option}`).join("\n")}${message.votedIndex != null ? `\n已选：${message.poll.options[message.votedIndex]}` : ""}`;
+    if (message.kind === "transfer") return `${message.transferType || "转账"} ¥${Number(message.amount || 0).toFixed(2)}${message.note ? ` · ${message.note}` : ""}`;
+    if (message.kind === "music") return `音乐分享：${message.track || "Untitled track"} — ${message.artist || "Unknown artist"}${message.note ? `\n${message.note}` : ""}`;
+    if (message.kind === "voice") return `[语音消息 0:${String(message.duration || 3).padStart(2, "0")}]`;
+    if (message.kind === "sticker") return `表情贴纸：${message.text || "♡"}`;
+    return message.text || "";
+  }
+  function attachMessageGesture(group, messageId) {
+    const open = () => { if (selectionMode) return; suppressMessageClickUntil = Date.now() + 900; openMessageMenu(messageId); };
+    group.addEventListener("pointerdown", event => {
+      if (selectionMode || event.target.closest(".poll-choice,.music-play,.voice-bubble")) return;
+      pressStart = { x: event.clientX, y: event.clientY, id: messageId };
+      clearTimeout(longPressTimer);
+      longPressTimer = window.setTimeout(open, 520);
+    });
+    group.addEventListener("pointermove", event => {
+      if (!pressStart || pressStart.id !== messageId) return;
+      if (Math.abs(event.clientX - pressStart.x) > 12 || Math.abs(event.clientY - pressStart.y) > 12) { clearTimeout(longPressTimer); longPressTimer = null; }
+    });
+    const clearPress = () => { clearTimeout(longPressTimer); longPressTimer = null; pressStart = null; };
+    group.addEventListener("pointerup", clearPress); group.addEventListener("pointercancel", clearPress); group.addEventListener("pointerleave", clearPress);
+    group.addEventListener("contextmenu", event => { event.preventDefault(); clearPress(); open(); });
+    group.addEventListener("click", event => { if (Date.now() < suppressMessageClickUntil) { event.preventDefault(); event.stopPropagation(); } }, true);
+  }
+  function openMessageMenu(messageId) {
+    if (openMessageMenuId === messageId && !$("#modal").hidden) return;
+    const messages = state.messages[activeContactId] || [];
+    const message = messages.find(item => item.id === messageId); if (!message) return;
+    openMessageMenuId = messageId;
+    showModal("Message options", "选择你想对这条消息做的事。", "✧", { menu: true, okText: "Close" });
+    const menu = $("#modal-extra");
+    const actions = [
+      ["✧　收藏这一条", () => saveSingleMessage(messageId)],
+      ["✕　删除消息", () => deleteSingleMessage(messageId)],
+      ["☷　进入多选模式", () => startSelectionMode(messageId)]
+    ];
+    actions.forEach(([label, handler]) => {
+      const button = document.createElement("button"); button.type = "button"; button.className = "message-menu-action"; button.textContent = label;
+      button.addEventListener("click", () => { closeModal(false); handler(); }); menu.append(button);
+    });
+  }
+  function saveSingleMessage(messageId) {
+    const message = (state.messages[activeContactId] || []).find(item => item.id === messageId); if (!message) return;
+    const alreadySaved = state.savedItems.some(item => item.type === "single-message" && item.contactId === activeContactId && item.sourceMessageId === messageId);
+    if (alreadySaved) { showModal("已经收藏过了", "这条消息已经在 Saved 里。", "✓"); return; }
+    const content = messageToReadable(message);
+    state.savedItems.unshift({ id: uid(), date: todayKey(), type: "single-message", title: `${message.type === "sent" ? state.profileName : currentContact().name} · 单条收藏`, text: content, contactId: activeContactId, contactName: currentContact().name, sender: message.type === "sent" ? state.profileName : currentContact().name, sourceMessageId: messageId, message: clone(message), createdAt: Date.now() });
+    selectedDate = todayKey(); calendarYear = new Date().getFullYear(); calendarMonth = new Date().getMonth();
+    saveState(); renderCalendar(); renderSavedDay();
+    showModal("已收藏到 Saved", "这条消息已经加入今天的纪念记录。", "♡");
+  }
+  async function deleteSingleMessage(messageId) {
+    if (!await showModal("删除这条消息？", "删除后将从当前对话中移除。已手动收藏到 Saved 的副本仍会保留。", "!", { confirm: true, okText: "Delete" })) return;
+    state.messages[activeContactId] = (state.messages[activeContactId] || []).filter(item => item.id !== messageId);
+    selectedMessageIds.delete(messageId); state.previews[activeContactId] = messageToReadable(state.messages[activeContactId].slice(-1)[0]) || currentContact().preview;
+    saveState(); renderMessages(); renderConversations();
+  }
+  async function deleteSelectedMessages() {
+    if (!selectedMessageIds.size) return;
+    const count = selectedMessageIds.size;
+    if (!await showModal("批量删除这些消息？", `将从当前对话中删除 ${count} 条已选消息；Saved 中已经收藏的副本仍会保留。`, "!", { confirm: true, okText: "Delete all" })) return;
+    state.messages[activeContactId] = (state.messages[activeContactId] || []).filter(item => !selectedMessageIds.has(item.id));
+    state.previews[activeContactId] = messageToReadable(state.messages[activeContactId].slice(-1)[0]) || currentContact().preview;
+    saveState(); endSelectionMode(); renderMessages(); renderConversations();
+  }
+  function saveSelectedGroup() {
+    const messages = (state.messages[activeContactId] || []).filter(item => selectedMessageIds.has(item.id));
+    if (!messages.length) return;
+    const snapshot = messages.map(message => ({ type: message.type, time: message.time || "", speaker: message.type === "sent" ? state.profileName : currentContact().name, text: messageToReadable(message), kind: message.kind || "text" }));
+    const duplicate = state.savedItems.some(item => item.type === "group-chat" && item.contactId === activeContactId && Array.isArray(item.sourceMessageIds) && item.sourceMessageIds.length === messages.length && item.sourceMessageIds.every(id => selectedMessageIds.has(id)));
+    if (duplicate) { showModal("这组对话已收藏", "这组消息已经在 Saved 里。", "✓"); return; }
+    state.savedItems.unshift({ id: uid(), date: todayKey(), type: "group-chat", title: `与 ${currentContact().name} 的合并聊天记录`, text: snapshot.map(line => `${line.speaker}：${line.text}`).join("\n"), messages: snapshot, sourceMessageIds: messages.map(message => message.id), contactId: activeContactId, contactName: currentContact().name, createdAt: Date.now() });
+    selectedDate = todayKey(); calendarYear = new Date().getFullYear(); calendarMonth = new Date().getMonth();
+    saveState(); endSelectionMode(); renderMessages(); renderCalendar(); renderSavedDay();
+    showModal("组收藏完成", `${snapshot.length} 条消息已合并保存到 Saved。`, "▤");
   }
   function receiveCard(contactId) {
     const pool = allCards();
@@ -209,7 +377,7 @@
     if (!state.messages[contactId]) state.messages[contactId] = [];
     state.messages[contactId].push(message); state.previews[contactId] = card;
     if (!state.collected.includes(card)) state.collected.unshift(card);
-    saveMemoryItem("card", `来自 ${CONTACTS.find(c => c.id === contactId)?.name || "TA"} 的字卡`, card);
+    // Receiving a reply is not an explicit save action; Saved only stores manually bookmarked messages.
     saveState();
     if (activeTab === "message" && inChat && activeContactId === contactId) renderMessages();
     renderConversations(); renderNotes(); renderMe();
@@ -336,9 +504,9 @@
     let note;
     if (editingNoteId) { note = state.notes.find(item => item.id === editingNoteId); if (note) Object.assign(note, { title, content, type: currentNoteKind, date: todayKey(), updatedAt: Date.now() }); }
     else { note = { id: uid(), type: currentNoteKind, title, content, date: todayKey(), createdAt: Date.now() }; state.notes.unshift(note); }
-    saveMemoryItem(currentNoteKind, title, content); saveState();
+    saveState();
     $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; currentNoteKind = "all"; renderLayout(); renderNotes(); renderCalendar(); renderSavedDay();
-    showModal("Saved", "这段内容已保存到 Notes，也出现在对应日期的 Saved 记忆里。", "✓");
+    showModal("Saved", "这段内容已保存到 Notes。Saved 只展示你在聊天中手动收藏的消息。", "✓");
   }
 
   function renderCalendar() {
@@ -363,8 +531,21 @@
     const list = $("#saved-day-list"); list.replaceChildren();
     const items = state.savedItems.filter(item => item.date === selectedDate);
     $("#saved-day-count").textContent = `${items.length} item${items.length === 1 ? "" : "s"}`;
-    if (!items.length) { const empty = document.createElement("div"); empty.className = "empty-message"; empty.textContent = "这一天还没有收藏。你可以在聊天中抽取字卡，或去 Notes 保存一段文字。"; list.append(empty); return; }
-    items.forEach(item => { const card = document.createElement("article"); card.className = "saved-item"; const title = document.createElement("strong"); title.textContent = `${({ card: "✧ CARD", letter: "✉ LETTER", diary: "▤ DIARY", collage: "▧ COLLAGE" })[item.type] || "✧ MEMORY"} · ${item.title}`; const p = document.createElement("p"); p.textContent = item.text; card.append(title, p); list.append(card); });
+    if (!items.length) { const empty = document.createElement("div"); empty.className = "empty-message"; empty.textContent = "这一天还没有手动收藏的聊天内容。长按消息气泡即可收藏，或多选后合并保存。"; list.append(empty); return; }
+    items.forEach(item => {
+      const card = document.createElement("article"); card.className = `saved-item ${item.type === "group-chat" ? "saved-group-chat" : "saved-single-chat"}`;
+      const title = document.createElement("strong");
+      title.textContent = `${item.type === "group-chat" ? "▤ GROUP CHAT" : "✧ SAVED MESSAGE"} · ${item.title}`;
+      card.append(title);
+      if (item.type === "group-chat" && Array.isArray(item.messages)) {
+        const lines = document.createElement("div"); lines.className = "saved-chat-lines";
+        item.messages.forEach(line => { const row = document.createElement("div"); row.className = `saved-chat-line ${line.type === "sent" ? "saved-line-sent" : "saved-line-received"}`; const speaker = document.createElement("b"); speaker.textContent = line.speaker || (line.type === "sent" ? state.profileName : item.contactName || "TA"); const content = document.createElement("span"); content.textContent = line.text || "[互动卡片]"; const time = document.createElement("small"); time.textContent = line.time || ""; row.append(speaker, content, time); lines.append(row); });
+        card.append(lines);
+      } else { const p = document.createElement("p"); p.textContent = item.text; card.append(p); }
+      const remove = document.createElement("button"); remove.type = "button"; remove.className = "saved-remove"; remove.textContent = "×"; remove.setAttribute("aria-label", "取消收藏");
+      remove.addEventListener("click", async () => { if (await showModal("从 Saved 移除？", "这只会取消收藏，不会删除原聊天消息。", "!", { confirm: true, okText: "Remove" })) { state.savedItems = state.savedItems.filter(saved => saved.id !== item.id); saveState(); renderCalendar(); renderSavedDay(); } });
+      card.append(remove); list.append(card);
+    });
   }
   function renderAnniversaries() {
     const list = $("#anniversary-list"); list.replaceChildren();
@@ -571,6 +752,9 @@
   $$(".tab-item").forEach(button => button.addEventListener("click", () => switchTab(button.dataset.tab)));
   $("#back-btn").addEventListener("click", () => { if (inChat) { inChat = false; renderLayout(); renderConversations(); } else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; renderLayout(); renderNotes(); } });
   $("#composer").addEventListener("submit", event => { event.preventDefault(); sendMessage($("#message-input").value); });
+  $("#cancel-selection").addEventListener("click", () => { endSelectionMode(); renderMessages(); });
+  $("#delete-selected").addEventListener("click", deleteSelectedMessages);
+  $("#save-selected-group").addEventListener("click", saveSelectedGroup);
   $("#more-btn").addEventListener("click", () => toggleComposerPanel("extension"));
   $("#sticker-btn").addEventListener("click", () => toggleComposerPanel("stickers"));
   $("#close-extension").addEventListener("click", () => { $("#extension-panel").hidden = true; });
@@ -624,7 +808,7 @@
   $("#edit-signature").addEventListener("click", () => { const signature = window.prompt("输入个人签名：", state.signature); if (signature !== null) { state.signature = signature.trim(); $("#profile-signature").textContent = state.signature; saveState(); renderMe(); } });
   $("#export-data").addEventListener("click", downloadJson);
   $("#reset-data").addEventListener("click", async () => { if (await showModal("Reset local data?", "这会清除本浏览器中的 Notes、字卡、聊天记录和自定义纪念日。", "!", { confirm: true, okText: "Reset" })) { state = freshState(); saveState(); selectedDate = todayKey(); calendarYear = new Date().getFullYear(); calendarMonth = new Date().getMonth(); $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature; renderConversations(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderNotes(); switchTab("message"); showModal("Reset complete", "本地数据已恢复为初始 Demo 内容。", "✓"); } });
-  $("#top-action").addEventListener("click", () => { if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes") $("#new-note").click(); else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else showModal("Message", "选择一条会话即可开始聊天。发送任意内容后，TA 会随机回复一张字卡。", "✎"); });
+  $("#top-action").addEventListener("click", () => { if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes") $("#new-note").click(); else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。长按消息可以收藏、删除或进入多选模式。", "✎"); });
 
   $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature; updateClock(); window.setInterval(updateClock, 30000);
   renderConversations(); renderMessages(); renderNotes(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderLayout();

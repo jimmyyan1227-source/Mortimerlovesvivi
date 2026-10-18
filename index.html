@@ -27,6 +27,10 @@
       <section class="page chat-page" id="page-chat" hidden>
         <div class="action-bar"><button class="action-btn" data-action="call">Call</button><button class="action-btn" data-action="facetime">FaceTime</button><button class="action-btn" data-action="contact">Contact</button></div>
         <div class="date-divider"><span>Today</span></div><div class="chat-messages" id="chat-messages" aria-live="polite"></div>
+        <div class="selection-toolbar" id="selection-toolbar" hidden>
+          <div class="selection-toolbar-top"><strong id="selection-count">0 selected</strong><button class="tiny-metal-btn" id="cancel-selection" type="button">取消</button></div>
+          <div class="selection-toolbar-actions"><button class="small-blue-btn danger-action" id="delete-selected" type="button">✕ 批量删除</button><button class="small-blue-btn" id="save-selected-group" type="button">▤ 合并收藏（组收藏）</button></div>
+        </div>
         <section class="extension-panel" id="extension-panel" hidden aria-label="More chat functions">
           <div class="panel-title-row"><strong>More little things</strong><button class="panel-close" id="close-extension" type="button" aria-label="Close panel">×</button></div>
           <div class="extension-options">
