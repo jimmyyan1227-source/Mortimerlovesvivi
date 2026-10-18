@@ -1,21 +1,19 @@
-# Retro Otome — 复古乙女字卡网页
+# Retro Otome — 复古乙女字卡互动 Web 应用
 
-一个参考早期 iOS / iPhone 短信界面的纯前端 Demo。使用原生 HTML、CSS、JavaScript，不需要安装依赖，适合直接上传到 GitHub 并通过 GitHub Pages 发布。
+这是一款原生 HTML / CSS / JavaScript 的静态 Web Demo，视觉参考早期 iPhone / iOS 短信应用：浅灰蓝底色、金属渐变导航、拟物按钮、蓝色发送气泡与灰白接收气泡。适合直接上传 GitHub 并用 GitHub Pages 发布。
 
-## 预览功能
+## 页面架构（底部 Tab 顺序固定）
 
-- 复古渐变导航栏、拟物按钮、蓝色发送气泡与灰色接收气泡
-- 会话列表与多角色聊天界面
-- 发送消息后随机收到一张字卡
-- 字卡收藏、拼信、复制信件
-- 模拟 Call / FaceTime / Contact 弹窗（不会发起真实通话）
-- 本地保存聊天和收藏（`localStorage`）
-- 导出当前数据为 JSON
-- 手机端全屏布局，桌面端手机机身预览
+1. **Message**：聊天列表、多个角色会话、Call / FaceTime / Contact 模拟交互、发送消息后随机收到内置或自定义字卡。
+2. **Notes**：信件、日记、字卡拼贴和全部内容。条目可进入独立编辑页，支持保存、编辑、删除，并可插入已收藏的字卡。
+3. **Saved**：可切换月份和日期的复古小日历；点击日期查看当天收藏的字卡、日记或其他创作；含纪念日列表，可新增和删除纪念日。
+4. **Me**：编辑显示名与签名、添加和删除自定义字卡、导出 JSON 数据、重置本地 Demo 数据。
 
-## 本地运行
+首页名片下方的四个按键文案为 **Memories / often / violently / intrude**。
 
-直接双击 `index.html` 通常即可打开。若浏览器限制部分功能，建议使用 VS Code 的 Live Server，或在项目目录运行：
+## 本地预览
+
+无需安装 Node.js 或依赖包。可直接打开 `index.html`。如需稳定预览，推荐在项目目录运行：
 
 ```bash
 python -m http.server 8000
@@ -25,12 +23,12 @@ python -m http.server 8000
 
 ## 发布到 GitHub Pages
 
-1. 在 GitHub 新建一个仓库，例如 `retro-otome`。
-2. 解压本 ZIP，将 `index.html`、`style.css`、`app.js`、`README.md` 上传到仓库根目录。
+1. 在 GitHub 创建一个新仓库，例如 `retro-otome`。
+2. 解压本 ZIP，把 `index.html`、`style.css`、`app.js`、`README.md` 上传到仓库根目录。
 3. 打开仓库 **Settings → Pages**。
 4. 在 **Build and deployment** 中选择 **Deploy from a branch**。
-5. Branch 选择 `main`，目录选择 `/(root)`，点击 **Save**。
-6. 等待 GitHub Pages 部署完成，页面地址会显示在 Pages 设置区域。
+5. 选择 `main` 分支、`/(root)` 目录并保存。
+6. 等待 GitHub Pages 部署后，在 Pages 设置页打开生成的网址。
 
 ## 项目结构
 
@@ -42,9 +40,9 @@ retro-otome/
 └── README.md
 ```
 
-## 数据与注意事项
+## 数据和能力边界
 
-- 聊天和字卡数据保存在当前浏览器的本地存储中；清除浏览器数据或更换设备后不会自动同步。
-- 头像使用 Unsplash 图片链接，需要网络连接才能加载；可按自己的角色设定替换。
-- 目前角色回复使用内置字卡随机抽取，不接入 AI 服务或后端。
-- 电话、FaceTime、联系人操作为视觉演示，不会调用真实通话、视频或支付服务。
+- 聊天、Notes、收藏、纪念日和自定义字卡保存在当前浏览器的 `localStorage` 中，不会自动跨设备同步。
+- 字卡回复目前由本地随机库产生，没有连接 AI 服务或后端。
+- Call、FaceTime、Contact 都是视觉交互演示，不会进行真实通话、视频或支付。
+- 头像通过 Unsplash 图片 URL 加载，需要网络连接；图片链接可以替换为你自己的素材。

@@ -4,125 +4,79 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#6d86a5">
-  <meta name="description" content="复古 iOS 短信风格的乙女字卡互动网页。">
-  <title>Retro Otome — 梦境收藏家</title>
+  <meta name="description" content="古早 iOS 拟物风格的乙女字卡互动 Web 应用。">
+  <title>Retro Otome — Dream Archive</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <main class="stage">
-    <section class="phone" aria-label="Retro Otome 应用预览">
-      <div class="status-bar">
-        <span id="status-time">23:58</span>
-        <div class="status-icons" aria-label="手机信号、电量">
-          <span class="signal"><i></i><i></i><i></i><i></i></span>
-          <svg class="wifi" viewBox="0 0 20 15" aria-hidden="true"><path d="M1 4.5Q10 -2 19 4.5L10 14Z" fill="currentColor"/><path d="M5 8Q10 4 15 8L10 14Z" fill="#6d86a5"/></svg>
-          <span class="battery"><b>24</b></span>
+<main class="stage">
+  <section class="phone" aria-label="Retro Otome 应用">
+    <div class="status-bar"><span id="status-time">23:58</span><div class="status-icons"><span class="signal"><i></i><i></i><i></i><i></i></span><svg class="wifi" viewBox="0 0 20 15" aria-hidden="true"><path d="M1 4.5Q10 -2 19 4.5L10 14Z" fill="currentColor"/><path d="M5 8Q10 4 15 8L10 14Z" fill="#6d86a5"/></svg><span class="battery"><b>24</b></span></div></div>
+    <header class="topbar"><button class="chrome-btn" id="back-btn" hidden>‹ Back</button><div class="top-title" id="top-title">Message</div><button class="chrome-btn" id="top-action">Edit</button></header>
+    <div class="screen">
+      <section class="page list-page" id="page-message">
+        <article class="profile-card">
+          <img class="profile-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="Profile avatar">
+          <div class="profile-counts"><div><strong id="photo-count">8</strong><span>photos</span></div><div><strong id="follower-count">4</strong><span>followers</span></div><div><strong id="following-count">8</strong><span>following</span></div><button class="done-btn" id="profile-done">Done</button></div>
+          <div class="profile-caption"><strong id="profile-name">heartYEAH:)</strong><span id="profile-signature">A leaf that remains evergreen</span></div>
+        </article>
+        <div class="mood-strip" aria-label="Profile phrase buttons"><button class="mood-chip active" data-filter="all">Memories</button><button class="mood-chip" data-filter="cute">often</button><button class="mood-chip" data-filter="soft">violently</button><button class="mood-chip" data-filter="all">intrude</button></div>
+        <div class="conversation-list" id="conversation-list" aria-label="Message conversations"></div>
+      </section>
+
+      <section class="page chat-page" id="page-chat" hidden>
+        <div class="action-bar"><button class="action-btn" data-action="call">Call</button><button class="action-btn" data-action="facetime">FaceTime</button><button class="action-btn" data-action="contact">Contact</button></div>
+        <div class="date-divider"><span>Today</span></div><div class="chat-messages" id="chat-messages" aria-live="polite"></div>
+        <form class="composer" id="composer"><button class="camera-btn" type="button" id="camera-btn" aria-label="Camera">◎</button><input id="message-input" type="text" autocomplete="off" placeholder="Send..." aria-label="Type a message"><button class="send-btn" type="submit">Send</button></form>
+      </section>
+
+      <section class="page notes-page" id="page-notes" hidden>
+        <div class="page-intro"><span class="intro-glyph">✉</span><div><strong>Notes & Fragments</strong><small>little things worth keeping</small></div></div>
+        <div id="notes-home">
+          <button class="notes-row" data-note-kind="letter"><span class="row-icon">✉</span><span class="row-copy"><strong>Letters / 信件</strong><small>把没说完的话，写给某一个人</small></span><span class="row-count" id="letter-count">0</span><span class="row-arrow">›</span></button>
+          <button class="notes-row" data-note-kind="diary"><span class="row-icon">▤</span><span class="row-copy"><strong>Diary / 日记</strong><small>留住今天的情绪和碎片</small></span><span class="row-count" id="diary-count">0</span><span class="row-arrow">›</span></button>
+          <button class="notes-row" data-note-kind="collage"><span class="row-icon">▧</span><span class="row-copy"><strong>Card Collage / 字卡拼贴</strong><small>从收藏的句子里重新排列灵感</small></span><span class="row-count" id="collage-count">0</span><span class="row-arrow">›</span></button>
+          <button class="notes-row" data-note-kind="all"><span class="row-icon">▦</span><span class="row-copy"><strong>All Fragments / 全部内容</strong><small>浏览与编辑所有已保存的创作</small></span><span class="row-arrow">›</span></button>
+          <button class="new-note-button" id="new-note">＋ New Note</button>
+          <div class="notes-saved-list" id="notes-saved-list"></div>
         </div>
-      </div>
-      <header class="topbar">
-        <button class="chrome-btn back-btn" id="back-btn" hidden>‹ Messages</button>
-        <div class="top-title" id="top-title">Messages</div>
-        <button class="chrome-btn" id="top-action">Edit</button>
-      </header>
-
-      <div class="screen">
-        <section class="page list-page" id="page-list">
-          <article class="profile-card">
-            <img class="profile-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="个人头像">
-            <div class="profile-counts">
-              <div><strong id="photo-count">8</strong><span>photos</span></div>
-              <div><strong id="follower-count">4</strong><span>followers</span></div>
-              <div><strong id="following-count">8</strong><span>following</span></div>
-              <button class="done-btn" id="profile-done">Done</button>
-            </div>
-            <div class="profile-caption">
-              <strong>heartYEAH:)</strong>
-              <span>A leaf that remains evergreen</span>
-            </div>
-          </article>
-
-          <div class="mood-strip" aria-label="状态筛选">
-            <button class="mood-chip" data-filter="all">• ь -</button>
-            <button class="mood-chip" data-filter="cute">&gt; ^ &lt;</button>
-            <button class="mood-chip" data-filter="soft">• ᴥ •</button>
-            <button class="mood-chip active" data-filter="all">⌁ ᴗ -</button>
+        <div id="note-editor" hidden>
+          <button class="text-back" id="notes-back">‹ All Notes</button>
+          <div class="editor-paper">
+            <label for="note-title">Title</label><input id="note-title" maxlength="80" placeholder="A little thing to remember...">
+            <label for="note-content">Your words</label><textarea id="note-content" placeholder="把那些没来得及说出口的话，留在这里……"></textarea>
           </div>
-
-          <div class="conversation-list" id="conversation-list" aria-label="聊天列表"></div>
-        </section>
-
-        <section class="page chat-page" id="page-chat" hidden>
-          <div class="action-bar">
-            <button class="action-btn" data-action="call"><span class="action-symbol">☎</span>Call</button>
-            <button class="action-btn" data-action="facetime"><span class="action-symbol">▣</span>FaceTime</button>
-            <button class="action-btn" data-action="contact"><span class="action-symbol">♙</span>Contact</button>
-          </div>
-          <div class="date-divider"><span>Today</span></div>
-          <div class="chat-messages" id="chat-messages" aria-live="polite"></div>
-          <form class="composer" id="composer">
-            <button class="camera-btn" type="button" id="camera-btn" aria-label="发送照片">◎</button>
-            <input id="message-input" type="text" autocomplete="off" placeholder="Send..." aria-label="输入消息">
-            <button class="send-btn" type="submit">Send</button>
-          </form>
-        </section>
-
-        <section class="page diary-page" id="page-diary" hidden>
-          <div class="section-heading"><span>✉</span><div><strong>字卡拼信笺</strong><small>collect little words, make a letter</small></div></div>
-          <textarea id="letter-box" class="letter-paper" placeholder="把收到的字卡拼成一封信……"></textarea>
-          <div class="diary-tools">
-            <button class="small-blue-btn" id="copy-letter">Copy letter</button>
-            <button class="small-blue-btn secondary" id="clear-letter">Clear</button>
-          </div>
-          <div class="deck-heading"><strong>已收集的字卡</strong><span id="collected-count">0 cards</span></div>
-          <p class="hint">点击任意字卡，即可添加到信纸中。</p>
-          <div class="card-tags" id="card-tags"></div>
-          <button class="draw-btn" id="draw-card">✦ 随机打捞一张字卡</button>
-        </section>
-
-        <section class="page collection-page" id="page-collection" hidden>
-          <div class="feature-panel">
-            <div class="feature-icon">✧</div>
-            <h2>字卡抽卡池</h2>
-            <p>Some words are little souvenirs.</p>
-            <div class="card-preview" id="draw-preview">“今晚月色很美，但我只看着你。”</div>
-            <button class="draw-btn" id="draw-card-main">✦ 抽取一张字卡</button>
-            <p class="hint">抽到的字卡会自动收进「拼字笺」。</p>
-          </div>
-          <h3 class="subheading">最近收集</h3>
-          <div id="recent-cards" class="recent-cards"></div>
-        </section>
-
-        <section class="page settings-page" id="page-settings" hidden>
-          <div class="settings-profile">
-            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="">
-            <div><strong>heartYEAH:)</strong><small>Retro iOS 5.1 · Dream archive</small></div>
-          </div>
-          <button class="setting-row" id="edit-signature"><span>个人签名</span><span>A leaf that remains evergreen　›</span></button>
-          <button class="setting-row" id="export-data"><span>导出字卡收藏</span><span>JSON　›</span></button>
-          <button class="setting-row" id="reset-data"><span>重置本地数据</span><span>›</span></button>
-          <p class="settings-note">所有聊天和字卡仅保存在当前浏览器中。此 Demo 不会连接真实电话、视频或支付服务。</p>
-        </section>
-      </div>
-
-      <nav class="tab-bar" aria-label="主导航">
-        <button class="tab-item active" data-tab="list"><span class="tab-icon">●</span><span>Messages</span></button>
-        <button class="tab-item" data-tab="diary"><span class="tab-icon">♙</span><span>Letters</span></button>
-        <button class="tab-item" data-tab="collection"><span class="tab-icon compass">◉</span><span>Cards</span><b class="tab-dot"></b></button>
-        <button class="tab-item" data-tab="settings"><span class="tab-icon">◐</span><span>Me</span></button>
-      </nav>
-
-      <div class="modal-overlay" id="modal" hidden>
-        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <div class="modal-symbol" id="modal-symbol">✦</div>
-          <h2 id="modal-title">Notice</h2>
-          <p id="modal-text"></p>
-          <button class="done-btn modal-ok" id="modal-ok">Okay</button>
+          <div class="editor-actions"><button class="small-blue-btn" id="save-note">Save note</button><button class="small-blue-btn secondary" id="delete-note" hidden>Delete</button></div>
+          <div class="editor-card-tools"><strong>Pick a collected card</strong><div class="card-tags compact-tags" id="note-card-tags"></div></div>
         </div>
-      </div>
-      <input id="import-file" type="file" accept="application/json" hidden>
-    </section>
-    <p class="outside-caption">RETRO OTOME · A LITTLE ARCHIVE OF WORDS</p>
-  </main>
-  <script src="./app.js"></script>
+      </section>
+
+      <section class="page saved-page" id="page-saved" hidden>
+        <div class="page-intro"><span class="intro-glyph">▦</span><div><strong>Saved Memories</strong><small>the dates we keep</small></div></div>
+        <div class="calendar-panel"><div class="calendar-heading"><button class="calendar-nav" id="month-prev" aria-label="Previous month">‹</button><strong id="calendar-title">October 2026</strong><button class="calendar-nav" id="month-next" aria-label="Next month">›</button></div><div class="weekdays"><span>SU</span><span>MO</span><span>TU</span><span>WE</span><span>TH</span><span>FR</span><span>SA</span></div><div class="calendar-grid" id="calendar-grid"></div><div class="calendar-legend"><span class="legend-dot"></span> saved memories <span class="legend-ring"></span> selected date</div></div>
+        <div class="saved-day-heading"><strong id="selected-date-title">Memories on this day</strong><span id="saved-day-count">0 items</span></div><div id="saved-day-list" class="saved-day-list"></div>
+        <div class="anniversary-header"><div><strong>Important Dates</strong><small>little anniversaries, forever saved</small></div><button class="plus-button" id="add-anniversary" aria-label="Add anniversary">＋</button></div>
+        <div id="anniversary-list" class="anniversary-list"></div>
+      </section>
+
+      <section class="page me-page" id="page-me" hidden>
+        <div class="settings-profile"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="Profile"><div><strong id="me-name">heartYEAH:)</strong><small>Retro iOS 5.1 · Dream archive</small><span id="me-signature">A leaf that remains evergreen</span></div></div>
+        <div class="me-section-title">PERSONAL DETAILS</div>
+        <button class="setting-row" id="edit-profile"><span>Display name / 名字</span><span>›</span></button><button class="setting-row" id="edit-signature"><span>Signature / 个人签名</span><span>›</span></button>
+        <div class="me-section-title custom-heading">CUSTOM CARD LIBRARY <span id="custom-card-count">0</span></div>
+        <p class="me-helper">在这里添加你自己的随机回复。添加后会和内置字卡一起参与抽取。</p>
+        <form class="custom-card-form" id="custom-card-form"><textarea id="custom-card-input" rows="2" maxlength="180" placeholder="输入一句想收到的话……"></textarea><button class="small-blue-btn" type="submit">＋ Add card</button></form>
+        <div class="custom-card-list" id="custom-card-list"></div>
+        <div class="me-section-title custom-heading">DATA & SETTINGS</div>
+        <button class="setting-row" id="export-data"><span>Export local data / 导出数据</span><span>JSON　›</span></button><button class="setting-row" id="reset-data"><span>Reset demo / 重置数据</span><span>›</span></button>
+        <p class="settings-note">记录保存在当前浏览器中。此 Demo 的电话、视频和 Contact 按钮仅为交互演示，不会发起真实通话或支付。</p>
+      </section>
+    </div>
+    <nav class="tab-bar" aria-label="Main navigation"><button class="tab-item active" data-tab="message"><span class="tab-icon">●</span><span>Message</span></button><button class="tab-item" data-tab="notes"><span class="tab-icon">▤</span><span>Notes</span></button><button class="tab-item" data-tab="saved"><span class="tab-icon compass">◉</span><span>Saved</span><b class="tab-dot"></b></button><button class="tab-item" data-tab="me"><span class="tab-icon">◐</span><span>Me</span></button></nav>
+    <div class="modal-overlay" id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-symbol" id="modal-symbol">✦</div><h2 id="modal-title">Notice</h2><p id="modal-text"></p><div class="modal-buttons"><button class="small-blue-btn secondary" id="modal-cancel">Cancel</button><button class="done-btn modal-ok" id="modal-ok">Okay</button></div></div></div>
+  </section>
+  <p class="outside-caption">RETRO OTOME · MEMORIES OF ANOTHER TIME</p>
+</main>
+<script src="./app.js"></script>
 </body>
 </html>
