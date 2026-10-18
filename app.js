@@ -29,7 +29,7 @@
     profileName: "heartYEAH:)", signature: "A leaf that remains evergreen",
     // The card library intentionally starts empty: only user-created/imported cards can reply.
     customCards: [], cardGroups: [], collected: [], messages: clone(DEFAULT_MESSAGES), previews: {}, notes: [],
-    savedItems: [], pinnedContacts: [], hiddenContacts: [], deletedContacts: [],
+    savedItems: [], pinnedContacts: [], hiddenContacts: [], deletedContacts: [], chatPreferences: {},
     anniversaries: [
       { id: "anniv-meet", title: "相识纪念日", date: "2026-05-14", note: "The day our story began." },
       { id: "anniv-first", title: "第一次约会", date: "2026-06-01", note: "A tiny date worth remembering." }
@@ -59,6 +59,7 @@
         pinnedContacts: Array.isArray(parsed.pinnedContacts) ? parsed.pinnedContacts : [],
         hiddenContacts: Array.isArray(parsed.hiddenContacts) ? parsed.hiddenContacts : [],
         deletedContacts: Array.isArray(parsed.deletedContacts) ? parsed.deletedContacts : [],
+        chatPreferences: parsed.chatPreferences && typeof parsed.chatPreferences === "object" ? parsed.chatPreferences : {},
         anniversaries: Array.isArray(parsed.anniversaries) ? parsed.anniversaries : [],
         collected: Array.isArray(parsed.collected) ? parsed.collected : [],
         customCards, cardGroups
@@ -93,6 +94,20 @@
     const enabledGroups = new Set(state.cardGroups.filter(group => group.enabled).map(group => group.id));
     return state.customCards.filter(card => card.enabled && (!card.groupId || enabledGroups.has(card.groupId)));
   }
+  const DEFAULT_CHAT_PREFERENCES = Object.freeze({
+    multiCardsEnabled: false, cardCount: 2, autoPunctuation: true, stickerEnabled: false,
+    delayMin: 1, delayMax: 3, replyProbability: 70
+  });
+  const RANDOM_STICKERS = ["ヽ(｡ゝω・｡)ﾉ", "(｡♥‿♥｡)", "( ˘ ³˘)♥", "♡", "(｡•̀ᴗ-)✧", "(づ｡◕‿‿◕｡)づ", "✧･ﾟ", "(¬‿¬)"];
+  function getChatPreferences(contactId = activeContactId) {
+    const stored = state.chatPreferences?.[contactId] || {};
+    return { ...DEFAULT_CHAT_PREFERENCES, ...stored };
+  }
+  function setChatPreferences(contactId, preferences) {
+    if (!state.chatPreferences || typeof state.chatPreferences !== "object") state.chatPreferences = {};
+    state.chatPreferences[contactId] = { ...DEFAULT_CHAT_PREFERENCES, ...preferences };
+    saveState();
+  }
   function showModal(title, message, symbol = "✦", options = {}) {
     $("#modal-title").textContent = title; $("#modal-text").textContent = message; $("#modal-symbol").textContent = symbol;
     $("#modal-extra").replaceChildren();
@@ -114,10 +129,10 @@
     $("#page-me").hidden = activeTab !== "me";
     $$(".tab-item").forEach(button => button.classList.toggle("active", button.dataset.tab === activeTab));
     $("#back-btn").hidden = !(inChat || (activeTab === "notes" && !$("#note-editor").hidden));
-    $("#top-action").hidden = activeTab === "message" && inChat;
+    $("#top-action").hidden = false;
     const titles = { message: inChat ? currentContact().name : "Message", notes: $("#note-editor").hidden ? "Notes" : "Note Editor", saved: "Saved", me: "Me" };
     $("#top-title").textContent = titles[activeTab];
-    $("#top-action").textContent = activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : "＋ New") : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
+    $("#top-action").textContent = activeTab === "message" && inChat ? "Edit" : activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : "＋ New") : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
   }
   function switchTab(tab) {
     activeTab = tab; inChat = false; endSelectionMode();
@@ -200,6 +215,7 @@
   }
   function appendMessageElement(container, message) {
     const group = document.createElement("div"); group.className = `message ${message.type === "sent" ? "sent" : "received"}`;
+    if (Array.isArray(message.cardIds) && message.cardIds.length > 1) group.classList.add("combo-message");
     group.dataset.messageId = message.id;
     if (selectionMode) {
       group.classList.add("selecting");
@@ -257,7 +273,9 @@
     } else {
       const bubble = document.createElement("div"); bubble.className = "bubble"; bubble.textContent = message.text || ""; group.append(bubble);
     }
-    const meta = document.createElement("div"); meta.className = "message-meta"; meta.textContent = `${message.time || nowTime()} ${message.type === "sent" ? "Delivered" : "Read"}`;
+    const meta = document.createElement("div"); meta.className = `message-meta ${message.status === "Delivered" ? "status-delivered" : "status-read"}`;
+    const defaultStatus = message.type === "sent" ? "Read" : "Delivered";
+    meta.textContent = `${message.time || nowTime()} ${message.status || defaultStatus}`;
     group.append(meta); container.append(group);
   }
   function renderSelectionToolbar() {
@@ -362,25 +380,70 @@
     saveState(); endSelectionMode(); renderMessages(); renderCalendar(); renderSavedDay();
     showModal("组收藏完成", `${snapshot.length} 条消息已合并保存到 Saved。`, "▤");
   }
-  function receiveCard(contactId) {
+  function showThinkingIndicator(contactId) {
+    if (!(activeTab === "message" && inChat && activeContactId === contactId)) return;
+    hideThinkingIndicator();
+    const row = document.createElement("div"); row.className = "typing-indicator"; row.id = "typing-indicator";
+    const dots = document.createElement("span"); dots.className = "typing-dots"; dots.innerHTML = "<i></i><i></i><i></i>";
+    const label = document.createElement("span"); label.textContent = `${currentContact().name} is thinking…`;
+    row.append(dots, label); $("#chat-messages").append(row); $("#chat-messages").scrollTop = $("#chat-messages").scrollHeight;
+  }
+  function hideThinkingIndicator() { $("#typing-indicator")?.remove(); }
+  function markMessagesRead(contactId, type) {
+    (state.messages[contactId] || []).forEach(message => { if (message.type === type) message.status = "Read"; });
+  }
+  function receiveCard(contactId, preferences = getChatPreferences(contactId)) {
+    hideThinkingIndicator();
     const pool = allCards();
     if (!pool.length) {
-      // Never silently fall back to a built-in phrase. The library is user-owned and may be empty/disabled.
       if (activeTab === "message" && inChat && activeContactId === contactId) {
         showModal("字卡库暂时没有可抽取内容", "请前往 Me 添加字卡，或启用至少一张字卡及其所属分组。", "✧");
       }
       return;
     }
-    const chosen = pool[Math.floor(Math.random() * pool.length)];
-    const card = chosen.text;
-    const message = { text: card, type: "received", time: nowTime(), cardId: chosen.id };
+    // Only an actual reply marks the player's pending messages as read.
+    markMessagesRead(contactId, "sent");
+    const requested = preferences.multiCardsEnabled ? Math.max(1, Math.min(5, Number(preferences.cardCount) || 1)) : 1;
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, Math.min(requested, shuffled.length));
+    let fragments = picked.map(card => {
+      let text = card.text;
+      if (preferences.multiCardsEnabled && preferences.autoPunctuation && text && !/[。！？.!?…]$/.test(text)) text += "。";
+      return text;
+    });
+    let replyText = fragments.join(preferences.multiCardsEnabled ? "\n" : "");
+    if (preferences.stickerEnabled) replyText += `${replyText ? " " : ""}${RANDOM_STICKERS[Math.floor(Math.random() * RANDOM_STICKERS.length)]}`;
+    const message = { id: uid(), text: replyText, type: "received", status: "Delivered", time: nowTime(), cardIds: picked.map(card => card.id) };
     if (!state.messages[contactId]) state.messages[contactId] = [];
-    state.messages[contactId].push(message); state.previews[contactId] = card;
-    if (!state.collected.includes(card)) state.collected.unshift(card);
-    // Receiving a reply is not an explicit save action; Saved only stores manually bookmarked messages.
+    state.messages[contactId].push(message); state.previews[contactId] = replyText;
+    picked.forEach(card => { if (!state.collected.includes(card.text)) state.collected.unshift(card.text); });
+    // Receiving a reply is not an explicit save action; Saved only stores manual bookmarks.
     saveState();
     if (activeTab === "message" && inChat && activeContactId === contactId) renderMessages();
     renderConversations(); renderNotes(); renderMe();
+  }
+  function scheduleCharacterResponse(contactId) {
+    const preferences = getChatPreferences(contactId);
+    const delayMin = Math.max(0, Math.min(30, Number(preferences.delayMin) || 0));
+    const delayMax = Math.max(delayMin, Math.min(60, Number(preferences.delayMax) || delayMin));
+    const delayMs = (delayMin + Math.random() * (delayMax - delayMin)) * 1000;
+    showThinkingIndicator(contactId);
+    window.setTimeout(() => {
+      hideThinkingIndicator();
+      // Probability is the chance of a normal response; the remaining percentage is read-but-no-reply.
+      if (Math.random() * 100 >= Number(preferences.replyProbability)) {
+        // A no-reply outcome is still a read receipt: the message is seen, but no response arrives.
+        markMessagesRead(contactId, "sent"); saveState();
+        if (activeTab === "message" && inChat && activeContactId === contactId) {
+          renderMessages();
+          const note = document.createElement("div"); note.className = "no-reply-note"; note.textContent = "Read · no reply";
+          $("#chat-messages").append(note); $("#chat-messages").scrollTop = $("#chat-messages").scrollHeight;
+          window.setTimeout(() => note.remove(), 2600);
+        }
+        return;
+      }
+      receiveCard(contactId, preferences);
+    }, delayMs);
   }
   function sendMessage(text) {
     const value = text.trim(); if (!value) return;
@@ -390,18 +453,21 @@
   function sendSpecialMessage(payload, shouldReply = true) {
     const id = activeContactId; if (!state.messages[id]) state.messages[id] = [];
     $("#extension-panel").hidden = true; $("#sticker-tray").hidden = true;
-    const message = { ...payload, id: payload.id || uid(), type: "sent", time: nowTime() };
+    // A player's new message marks previously delivered character messages as Read.
+    markMessagesRead(id, "received");
+    const message = { ...payload, id: payload.id || uid(), type: "sent", status: "Delivered", time: nowTime() };
     state.messages[id].push(message);
     state.previews[id] = message.text || message.poll?.question || (message.kind === "transfer" ? `${message.transferType} ¥${message.amount}` : message.kind === "music" ? `♫ ${message.track}` : message.kind === "voice" ? "[语音消息]" : "[表情贴纸]");
     saveState(); renderMessages(); renderConversations();
-    if (shouldReply) window.setTimeout(() => receiveCard(id), 550);
+    if (shouldReply) scheduleCharacterResponse(id);
   }
   function answerPoll(messageId, optionIndex) {
     const messages = state.messages[activeContactId] || [];
     const poll = messages.find(item => item.id === messageId && item.kind === "poll");
     if (!poll || poll.votedIndex != null || !poll.poll?.options?.[optionIndex]) return;
     poll.votedIndex = optionIndex;
-    messages.push({ id: uid(), text: `我选「${poll.poll.options[optionIndex]}」。你呢？`, type: "received", time: nowTime() });
+    markMessagesRead(activeContactId, "sent");
+    messages.push({ id: uid(), text: `我选「${poll.poll.options[optionIndex]}」。你呢？`, type: "received", status: "Delivered", time: nowTime() });
     state.previews[activeContactId] = `我选「${poll.poll.options[optionIndex]}」`;
     saveState(); renderMessages(); renderConversations();
   }
@@ -744,6 +810,74 @@
     state.customCards = state.customCards.filter(item => item.id !== cardId); saveState(); renderMe();
   }
 
+  function preferenceSection(parent, title, subtitle = "") {
+    const section = document.createElement("section"); section.className = "pref-section";
+    const head = document.createElement("div"); head.className = "pref-section-heading";
+    const strong = document.createElement("strong"); strong.textContent = title; head.append(strong);
+    if (subtitle) { const small = document.createElement("small"); small.textContent = subtitle; head.append(small); }
+    section.append(head); parent.append(section); return section;
+  }
+  function preferenceToggle(parent, title, description, checked, onChange) {
+    const row = document.createElement("div"); row.className = "pref-row";
+    const copy = document.createElement("div"); copy.className = "pref-copy";
+    const label = document.createElement("strong"); label.textContent = title;
+    const hint = document.createElement("small"); hint.textContent = description;
+    copy.append(label, hint);
+    const wrap = document.createElement("label"); wrap.className = "retro-switch pref-switch";
+    const input = document.createElement("input"); input.type = "checkbox"; input.checked = Boolean(checked);
+    const slider = document.createElement("span"); slider.className = "retro-slider";
+    input.addEventListener("change", () => onChange(input.checked)); wrap.append(input, slider);
+    row.append(copy, wrap); parent.append(row); return input;
+  }
+  function preferenceRange(parent, title, description, min, max, step, value, onChange, formatter = value => String(value)) {
+    const row = document.createElement("div"); row.className = "pref-range-row";
+    const titleRow = document.createElement("div"); titleRow.className = "pref-range-title";
+    const label = document.createElement("strong"); label.textContent = title;
+    const valueLabel = document.createElement("output"); valueLabel.className = "pref-range-value"; valueLabel.textContent = formatter(value);
+    titleRow.append(label, valueLabel);
+    const hint = document.createElement("small"); hint.className = "pref-range-hint"; hint.textContent = description;
+    const input = document.createElement("input"); input.className = "retro-range"; input.type = "range"; input.min = min; input.max = max; input.step = step; input.value = value;
+    input.addEventListener("input", () => { valueLabel.textContent = formatter(Number(input.value)); onChange(Number(input.value), input, valueLabel); });
+    row.append(titleRow, hint, input); parent.append(row); return input;
+  }
+  async function openChatPreferences() {
+    const contactId = activeContactId;
+    const prefs = { ...getChatPreferences(contactId) };
+    const resultPromise = showModal(`${currentContact().name} · 对话偏好`, "只影响当前角色；设置会保存在这台设备的浏览器中。", "⚙", { confirm: true, okText: "Save Preferences" });
+    const host = $("#modal-extra");
+    const comboSection = preferenceSection(host, "01 · 回复内容生成规则", "RESPONSE COMPOSITION");
+    const comboOptions = document.createElement("div"); comboOptions.className = "pref-nested";
+    preferenceToggle(comboSection, "拼字卡功能 / Multi-Cards Combo", "开启后，一次回复可组合多张已启用字卡。", prefs.multiCardsEnabled, checked => { prefs.multiCardsEnabled = checked; comboOptions.classList.toggle("is-disabled", !checked); });
+    preferenceRange(comboOptions, "字卡数量", "每次回复使用的字卡张数。可用字卡不足时会自动取可用数量。", 1, 5, 1, prefs.cardCount, value => { prefs.cardCount = value; }, value => `${value} 张`);
+    preferenceToggle(comboOptions, "标点自动补充", "拼字卡模式下，自动为每条字卡补上句号“。”。", prefs.autoPunctuation, checked => { prefs.autoPunctuation = checked; });
+    comboOptions.classList.toggle("is-disabled", !prefs.multiCardsEnabled);
+    comboSection.append(comboOptions);
+    preferenceToggle(comboSection, "附带颜文字 / Sticker in Bubble", "角色回复时，在同一个气泡末尾随机附上颜文字。", prefs.stickerEnabled, checked => { prefs.stickerEnabled = checked; });
+
+    const delaySection = preferenceSection(host, "02 · 拟人化回复与状态联动", "HUMAN-LIKE RESPONSE BEHAVIOR");
+    preferenceRange(delaySection, "思考延迟 · 最短时间", "收到消息后至少等待多久再回复。", 0, 10, 0.5, prefs.delayMin, (value, input, output) => {
+      prefs.delayMin = value;
+      if (prefs.delayMax < value) { prefs.delayMax = value; const maxSlider = host.querySelector("#pref-delay-max"); if (maxSlider) { maxSlider.value = value; maxSlider.dispatchEvent(new Event("input")); } }
+    }, value => `${Number(value).toFixed(1)} 秒`).id = "pref-delay-min";
+    preferenceRange(delaySection, "思考延迟 · 最长时间", "系统会在最短与最长时间之间随机等待。", 0, 30, 0.5, Math.max(prefs.delayMax, prefs.delayMin), (value, input, output) => {
+      prefs.delayMax = Math.max(value, prefs.delayMin);
+      if (value < prefs.delayMin) { input.value = String(prefs.delayMin); output.textContent = `${Number(prefs.delayMin).toFixed(1)} 秒`; }
+    }, value => `${Number(value).toFixed(1)} 秒`).id = "pref-delay-max";
+    preferenceRange(delaySection, "正常回复概率", "例如 70% 正常回复，剩余 30% 会已读不回。", 0, 100, 5, prefs.replyProbability, value => { prefs.replyProbability = value; }, value => `${value}%`);
+    const statusNote = document.createElement("div"); statusNote.className = "pref-status-note";
+    statusNote.innerHTML = "<strong>Delivered / Read 状态规则</strong><span>你发送消息后，对方此前的消息变为 Read；你的新消息先显示 Delivered。角色实际回复后，你的消息变为 Read，而角色的新消息显示 Delivered。若触发已读不回，你的消息会继续保持 Delivered。</span>";
+    delaySection.append(statusNote);
+    const result = await resultPromise;
+    if (result) {
+      prefs.cardCount = Math.max(1, Math.min(5, Number(prefs.cardCount) || 1));
+      prefs.delayMin = Math.max(0, Math.min(10, Number(prefs.delayMin) || 0));
+      prefs.delayMax = Math.max(prefs.delayMin, Math.min(30, Number(prefs.delayMax) || prefs.delayMin));
+      prefs.replyProbability = Math.max(0, Math.min(100, Number(prefs.replyProbability)));
+      setChatPreferences(contactId, prefs);
+      showModal("Preferences Saved", `${currentContact().name} 的对话偏好已保存。`, "✓");
+    }
+  }
+
   function downloadJson() {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json;charset=utf-8" }); const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "retro-otome-backup.json"; anchor.click(); URL.revokeObjectURL(url);
   }
@@ -808,7 +942,7 @@
   $("#edit-signature").addEventListener("click", () => { const signature = window.prompt("输入个人签名：", state.signature); if (signature !== null) { state.signature = signature.trim(); $("#profile-signature").textContent = state.signature; saveState(); renderMe(); } });
   $("#export-data").addEventListener("click", downloadJson);
   $("#reset-data").addEventListener("click", async () => { if (await showModal("Reset local data?", "这会清除本浏览器中的 Notes、字卡、聊天记录和自定义纪念日。", "!", { confirm: true, okText: "Reset" })) { state = freshState(); saveState(); selectedDate = todayKey(); calendarYear = new Date().getFullYear(); calendarMonth = new Date().getMonth(); $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature; renderConversations(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderNotes(); switchTab("message"); showModal("Reset complete", "本地数据已恢复为初始 Demo 内容。", "✓"); } });
-  $("#top-action").addEventListener("click", () => { if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes") $("#new-note").click(); else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。长按消息可以收藏、删除或进入多选模式。", "✎"); });
+  $("#top-action").addEventListener("click", () => { if (activeTab === "message" && inChat) openChatPreferences(); else if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes") $("#new-note").click(); else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。", "✎"); });
 
   $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature; updateClock(); window.setInterval(updateClock, 30000);
   renderConversations(); renderMessages(); renderNotes(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderLayout();
