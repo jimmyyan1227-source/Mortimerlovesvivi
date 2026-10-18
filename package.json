@@ -1,0 +1,12 @@
+{
+  "name": "retro-otome-deepl-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Server-side DeepL proxy for the Retro Otome static web app",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
