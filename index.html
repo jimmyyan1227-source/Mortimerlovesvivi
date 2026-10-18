@@ -84,23 +84,24 @@
       </section>
 
       <section class="page me-page" id="page-me" hidden>
-        <div class="settings-profile"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="Profile"><div><strong id="me-name">heartYEAH:)</strong><small>Retro iOS 5.1 · Dream archive</small><span id="me-signature">A leaf that remains evergreen</span></div></div>
+        <div class="settings-profile"><img id="me-profile-avatar" class="me-profile-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="Profile avatar" role="button" tabindex="0" title="点击更换头像"><div><strong id="me-name">heartYEAH:)</strong><small>Retro iOS 5.1 · Dream archive</small><span id="me-signature">A leaf that remains evergreen</span></div></div>
         <div class="me-section-title">PERSONAL DETAILS</div>
         <button class="setting-row" id="edit-profile"><span>Display name / 名字</span><span>›</span></button><button class="setting-row" id="edit-signature"><span>Signature / 个人签名</span><span>›</span></button>
         <div class="me-section-title custom-heading">CUSTOM CARD LIBRARY <span id="custom-card-count">0 / 0 active</span></div>
         <p class="me-helper">字卡库初始为空，完全由你创建。只有已启用的字卡与分组会参与随机回复。</p>
         <div class="card-global-controls"><button class="small-blue-btn" type="button" id="enable-all-cards">✓ 全选启用</button><button class="small-blue-btn secondary" type="button" id="disable-all-cards">⊘ 全选禁用</button></div>
-        <div class="card-subheading"><strong>分组管理 / Groups</strong><button class="small-blue-btn" type="button" id="create-card-group">＋ 新建分组</button></div>
-        <div class="card-group-list" id="card-group-list"></div>
+        <div class="card-subheading group-management-heading"><strong>分组管理 / Groups</strong><div class="group-management-actions"><button class="small-blue-btn secondary" type="button" id="toggle-card-groups" aria-expanded="false">▸ 查看分组</button><button class="small-blue-btn" type="button" id="create-card-group">＋ 新建分组</button></div></div>
+        <div class="card-group-list" id="card-group-list" hidden></div>
         <div class="card-subheading add-card-heading"><strong>添加字卡 / Add Cards</strong><span>一行一句 · 支持批量</span></div>
         <form class="custom-card-form" id="custom-card-form">
           <label class="card-field-label" for="custom-card-batch">字卡内容（每行一张）</label>
           <textarea id="custom-card-batch" rows="4" maxlength="12000" placeholder="一行一句，可一次粘贴多张字卡……"></textarea>
           <div class="card-form-footer"><label class="group-select-label" for="custom-card-group">加入分组<select id="custom-card-group"><option value="">不分组 / Ungrouped</option></select></label><button class="small-blue-btn" type="submit">＋ 批量添加</button></div>
         </form>
-        <div class="card-import-row"><input id="card-file-input" type="file" accept=".txt,.csv,text/plain,text/csv" hidden><button class="small-blue-btn secondary" type="button" id="import-card-file">⇧ 导入 .TXT / .CSV</button><span>按行解析，自动跳过重复内容</span></div>
-        <div class="card-subheading card-list-heading"><button class="section-collapse-btn" id="toggle-card-list" type="button" aria-expanded="true"><span class="collapse-chevron" aria-hidden="true">▾</span><strong>字卡列表 / Card Status</strong></button><span>单条开关可独立控制</span></div>
-        <div id="card-list-content">
+        <div class="card-import-row"><input id="card-file-input" type="file" accept=".txt,.csv,.json,text/plain,text/csv,application/json" hidden><button class="small-blue-btn secondary" type="button" id="import-card-file">⇧ 导入 .TXT / .CSV / .JSON</button><span>支持字卡 JSON 分组导入；自动跳过重复内容</span></div>
+        <div class="card-search-wrap"><label for="card-global-search">⌕ 全局搜索 / SEARCH CARDS</label><div class="card-search-input-row"><input id="card-global-search" type="search" autocomplete="off" placeholder="输入关键字，搜索全部字卡……"><button id="clear-card-search" class="tiny-metal-btn" type="button" aria-label="清空搜索">×</button></div><small id="card-search-count">可搜索所有分组中的字卡</small></div>
+        <div class="card-subheading card-list-heading"><button class="section-collapse-btn" id="toggle-card-list" type="button" aria-expanded="false"><span class="collapse-chevron" aria-hidden="true">▸</span><strong>字卡列表 / Card Status</strong></button><span>单条开关可独立控制</span></div>
+        <div id="card-list-content" hidden>
           <div class="batch-toolbar" id="batch-toolbar">
             <label class="batch-select-all"><input type="checkbox" id="select-all-cards"><span>全选当前字卡</span></label>
             <span class="batch-selected-count" id="batch-selected-count">已选 0 张</span>

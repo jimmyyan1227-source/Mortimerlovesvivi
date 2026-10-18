@@ -88,7 +88,7 @@
   let suppressMessageClickUntil = 0;
   let openMessageMenuId = null;
   const CARD_UI_KEY = "retroOtome_cardLibraryUI_v1";
-  let cardUI = (() => { try { return { listCollapsed: false, collapsedGroups: {}, ...(JSON.parse(localStorage.getItem(CARD_UI_KEY) || "{}")) }; } catch { return { listCollapsed: false, collapsedGroups: {} }; } })();
+  let cardUI = (() => { try { return { listCollapsed: true, groupManagerCollapsed: true, collapsedGroups: {}, ...(JSON.parse(localStorage.getItem(CARD_UI_KEY) || "{}")) }; } catch { return { listCollapsed: true, groupManagerCollapsed: true, collapsedGroups: {} }; } })();
   const selectedCardIds = new Set();
   function saveCardUI() { try { localStorage.setItem(CARD_UI_KEY, JSON.stringify(cardUI)); } catch {} }
 
@@ -858,6 +858,9 @@
 
   function renderCardGroups() {
     const container = $("#card-group-list");
+    const groupToggle = $("#toggle-card-groups");
+    if (container) container.hidden = Boolean(cardUI.groupManagerCollapsed);
+    if (groupToggle) { groupToggle.setAttribute("aria-expanded", String(!cardUI.groupManagerCollapsed)); groupToggle.textContent = cardUI.groupManagerCollapsed ? "▸ 查看分组" : "▾ 收起分组"; }
     container.replaceChildren();
     if (!state.cardGroups.length) {
       const empty = document.createElement("div"); empty.className = "empty-message";
@@ -900,8 +903,36 @@
     const container = $("#custom-card-list");
     container.replaceChildren();
     const listContent = $("#card-list-content"), listToggle = $("#toggle-card-list");
-    if (listContent) listContent.hidden = Boolean(cardUI.listCollapsed);
-    if (listToggle) { listToggle.setAttribute("aria-expanded", String(!cardUI.listCollapsed)); const chevron = $(".collapse-chevron", listToggle); if (chevron) chevron.textContent = cardUI.listCollapsed ? "▸" : "▾"; }
+    const searchInput = $("#card-global-search"), searchCount = $("#card-search-count");
+    const query = (searchInput?.value || "").trim().toLocaleLowerCase();
+    if (listContent) listContent.hidden = Boolean(cardUI.listCollapsed && !query);
+    if (listToggle) { listToggle.setAttribute("aria-expanded", String(!cardUI.listCollapsed || Boolean(query))); const chevron = $(".collapse-chevron", listToggle); if (chevron) chevron.textContent = (cardUI.listCollapsed && !query) ? "▸" : "▾"; }
+    const groupName = card => state.cardGroups.find(group => group.id === card.groupId)?.name || "未分组 / Ungrouped";
+    if (query) {
+      const matches = state.customCards.filter(card => card.text.toLocaleLowerCase().includes(query) || groupName(card).toLocaleLowerCase().includes(query));
+      if (searchCount) searchCount.textContent = `找到 ${matches.length} 张字卡${matches.length ? " · 已显示所属分组与快捷操作" : " · 换个关键词试试"}`;
+      if (!matches.length) { const empty = document.createElement("div"); empty.className = "empty-message"; empty.textContent = "没有找到匹配的字卡。"; container.append(empty); syncBatchToolbar(); return; }
+      matches.forEach(card => {
+        const row = document.createElement("div"); row.className = `custom-card-item search-result-item${isCardActive(card) ? " is-active" : " is-inactive"}${selectedCardIds.has(card.id) ? " is-selected" : ""}`;
+        const pickLabel = document.createElement("label"); pickLabel.className = "card-pick-label"; pickLabel.title = "选择这张字卡";
+        const pick = document.createElement("input"); pick.type = "checkbox"; pick.checked = selectedCardIds.has(card.id); pick.setAttribute("aria-label", `选择字卡：${card.text}`);
+        pick.addEventListener("change", () => { if (pick.checked) selectedCardIds.add(card.id); else selectedCardIds.delete(card.id); row.classList.toggle("is-selected", pick.checked); syncBatchToolbar(); });
+        const pickFace = document.createElement("span"); pickFace.className = "retro-checkbox-face"; pickLabel.append(pick, pickFace);
+        const textWrap = document.createElement("div"); textWrap.className = "search-result-copy";
+        const text = document.createElement("span"); text.className = "managed-card-text"; text.textContent = card.text;
+        const groupTag = document.createElement("small"); groupTag.className = "search-result-group"; groupTag.textContent = `GROUP · ${groupName(card)}`;
+        textWrap.append(text, groupTag);
+        const activeLabel = document.createElement("label"); activeLabel.className = "retro-switch card-switch"; activeLabel.title = "单条字卡启用状态";
+        const toggle = document.createElement("input"); toggle.type = "checkbox"; toggle.checked = card.enabled; toggle.setAttribute("aria-label", `启用字卡：${card.text}`);
+        toggle.addEventListener("change", () => { card.enabled = toggle.checked; saveState(); renderMe(); });
+        const slider = document.createElement("span"); slider.className = "retro-slider"; activeLabel.append(toggle, slider);
+        const edit = document.createElement("button"); edit.type = "button"; edit.className = "tiny-metal-btn"; edit.textContent = "Edit"; edit.addEventListener("click", () => editCard(card.id));
+        const del = document.createElement("button"); del.type = "button"; del.className = "tiny-metal-btn danger"; del.textContent = "×"; del.setAttribute("aria-label", "Delete card"); del.addEventListener("click", () => deleteCard(card.id));
+        row.append(pickLabel, textWrap, activeLabel, edit, del); container.append(row);
+      });
+      syncBatchToolbar(); return;
+    }
+    if (searchCount) searchCount.textContent = "可搜索所有分组中的字卡";
     if (!state.customCards.length) {
       const empty = document.createElement("div"); empty.className = "empty-message";
       empty.textContent = "字卡库目前为空。添加或导入你自己的短句后，已启用的字卡才会参与随机回复。";
@@ -924,12 +955,8 @@
       const selectedInGroup = cards.filter(card => selectedCardIds.has(card.id)).length;
       groupPick.checked = cards.length > 0 && selectedInGroup === cards.length;
       groupPick.indeterminate = selectedInGroup > 0 && selectedInGroup < cards.length;
-      groupPick.addEventListener("change", () => {
-        cards.forEach(card => groupPick.checked ? selectedCardIds.add(card.id) : selectedCardIds.delete(card.id));
-        renderManagedCards();
-      });
-      groupPickLabel.append(groupPick);
-      header.append(title, groupPickLabel);
+      groupPick.addEventListener("change", () => { cards.forEach(card => groupPick.checked ? selectedCardIds.add(card.id) : selectedCardIds.delete(card.id)); renderManagedCards(); });
+      groupPickLabel.append(groupPick); header.append(title, groupPickLabel);
       const rows = document.createElement("div"); rows.className = "managed-group-cards"; rows.hidden = groupCollapsed;
       title.addEventListener("click", () => { const key = section.id || "__ungrouped__"; cardUI.collapsedGroups[key] = !cardUI.collapsedGroups[key]; saveCardUI(); renderManagedCards(); });
       cards.forEach(card => {
@@ -983,21 +1010,75 @@
     return rows;
   }
 
+  async function importReplyJson(source) {
+    let data;
+    try { data = JSON.parse(source); } catch { throw new Error("JSON 格式无效，请确认文件内容完整。"); }
+    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("这不是有效的字卡 JSON 对象。");
+    const groups = Array.isArray(data.customReplyGroups) ? data.customReplyGroups : [];
+    const replies = Array.isArray(data.customReplies) ? data.customReplies : [];
+    if (!groups.length && !replies.length) throw new Error("没有找到 customReplies 或 customReplyGroups 字段。");
+
+    let added = 0, skipped = 0, groupsAdded = 0;
+    const existingText = new Set(state.customCards.map(card => card.text.trim().toLocaleLowerCase()));
+    const groupIdsByName = new Map(state.cardGroups.map(group => [group.name.trim().toLocaleLowerCase(), group.id]));
+    const importedText = new Set();
+    const normalizedGroups = [];
+    for (const sourceGroup of groups) {
+      if (!sourceGroup || typeof sourceGroup !== "object") continue;
+      const name = String(sourceGroup.name || "导入分组").trim() || "导入分组";
+      const key = name.toLocaleLowerCase();
+      let groupId = groupIdsByName.get(key);
+      if (!groupId) {
+        groupId = uid();
+        state.cardGroups.push({ id: groupId, name, enabled: sourceGroup.disabled !== true });
+        groupIdsByName.set(key, groupId); groupsAdded++;
+      } else {
+        const existingGroup = state.cardGroups.find(group => group.id === groupId);
+        if (existingGroup) existingGroup.enabled = sourceGroup.disabled !== true;
+      }
+      normalizedGroups.push({ sourceGroup, groupId });
+      const items = Array.isArray(sourceGroup.items) ? sourceGroup.items : [];
+      for (const item of items) {
+        const text = String(item ?? "").trim();
+        if (!text) continue;
+        const keyText = text.toLocaleLowerCase();
+        if (existingText.has(keyText) || importedText.has(keyText)) { skipped++; continue; }
+        state.customCards.push({ id: uid(), text, groupId, enabled: sourceGroup.disabled !== true, createdAt: Date.now() });
+        existingText.add(keyText); importedText.add(keyText); added++;
+      }
+    }
+    // customReplies is the complete list in this export format. Import any entries not already covered by a group as ungrouped cards.
+    for (const item of replies) {
+      const text = String(item ?? "").trim();
+      if (!text) continue;
+      const keyText = text.toLocaleLowerCase();
+      if (existingText.has(keyText) || importedText.has(keyText)) continue;
+      state.customCards.push({ id: uid(), text, groupId: "", enabled: true, createdAt: Date.now() });
+      existingText.add(keyText); importedText.add(keyText); added++;
+    }
+    saveState(); renderMe();
+    showModal("JSON 导入完成", `新增 ${added} 张字卡，新增 ${groupsAdded} 个分组${skipped ? `，跳过重复字卡 ${skipped} 张` : ""}。分组和字卡的启用状态已按文件内容导入。`, "✓");
+  }
+
   async function importCardFile(file) {
     if (!file) return;
     try {
       const source = (await file.text()).replace(/^\uFEFF/, "");
-      let lines;
-      if (/\.csv$/i.test(file.name) || file.type.includes("csv")) {
-        const rows = parseCSVRows(source);
-        const header = (rows[0] || []).map(cell => cell.toLowerCase());
-        const cardColumn = header.findIndex(cell => /^(card|text|content|sentence|phrase|字卡|句子|内容|文案)$/.test(cell));
-        const hasHeader = cardColumn >= 0;
-        const column = hasHeader ? cardColumn : 0;
-        lines = rows.slice(hasHeader ? 1 : 0).map(row => row[column] || row.find(Boolean) || "");
-      } else lines = source.split(/\r?\n/);
-      await addCardsFromText(lines.join("\n"), $("#custom-card-group").value);
-    } catch (error) { showModal("导入失败", "无法读取这个文件。请使用 UTF-8 编码的 .txt 或 .csv 文件。", "!"); }
+      if (/\.json$/i.test(file.name) || file.type.includes("json")) {
+        await importReplyJson(source);
+      } else {
+        let lines;
+        if (/\.csv$/i.test(file.name) || file.type.includes("csv")) {
+          const rows = parseCSVRows(source);
+          const header = (rows[0] || []).map(cell => cell.toLowerCase());
+          const cardColumn = header.findIndex(cell => /^(card|text|content|sentence|phrase|字卡|句子|内容|文案)$/.test(cell));
+          const hasHeader = cardColumn >= 0;
+          const column = hasHeader ? cardColumn : 0;
+          lines = rows.slice(hasHeader ? 1 : 0).map(row => row[column] || row.find(Boolean) || "");
+        } else lines = source.split(/\r?\n/);
+        await addCardsFromText(lines.join("\n"), $("#custom-card-group").value);
+      }
+    } catch (error) { showModal("导入失败", error?.message || "无法读取文件。请使用 UTF-8 编码的 .txt、.csv 或兼容的 .json 文件。", "!"); }
     $("#card-file-input").value = "";
   }
 
@@ -1201,6 +1282,9 @@
     if (added) input.value = "";
   });
   $("#create-card-group").addEventListener("click", createCardGroup);
+  $("#toggle-card-groups").addEventListener("click", () => { cardUI.groupManagerCollapsed = !cardUI.groupManagerCollapsed; saveCardUI(); renderCardGroups(); });
+  $("#card-global-search").addEventListener("input", () => renderManagedCards());
+  $("#clear-card-search").addEventListener("click", () => { $("#card-global-search").value = ""; renderManagedCards(); $("#card-global-search").focus(); });
   $("#import-card-file").addEventListener("click", () => $("#card-file-input").click());
   $("#card-file-input").addEventListener("change", event => importCardFile(event.target.files?.[0]));
   $("#enable-all-cards").addEventListener("click", () => {
@@ -1236,7 +1320,7 @@
   $("#top-action").addEventListener("click", () => { if (activeTab === "message" && inChat) openChatPreferences(); else if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes") $("#new-note").click(); else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。", "✎"); });
 
   $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature;
-  if (state.profileAvatar) $("#profile-avatar").src = state.profileAvatar;
+  if (state.profileAvatar) { $("#profile-avatar").src = state.profileAvatar; const meAvatar = $("#me-profile-avatar"); if (meAvatar) meAvatar.src = state.profileAvatar; }
 
   function readAvatarFile(file) {
     return new Promise((resolve, reject) => {
@@ -1261,11 +1345,16 @@
   }
   function chooseProfileAvatar() {
     const input = document.createElement("input"); input.type = "file"; input.accept = "image/*";
-    input.addEventListener("change", async () => { if (!input.files?.[0]) return; try { state.profileAvatar = await readAvatarFile(input.files[0]); $("#profile-avatar").src = state.profileAvatar; saveState(); } catch (error) { showModal("头像设置失败", error.message, "!"); } });
+    input.addEventListener("change", async () => { if (!input.files?.[0]) return; try { state.profileAvatar = await readAvatarFile(input.files[0]); $("#profile-avatar").src = state.profileAvatar; const meAvatar = $("#me-profile-avatar"); if (meAvatar) meAvatar.src = state.profileAvatar; saveState(); } catch (error) { showModal("头像设置失败", error.message, "!"); } });
     input.click();
   }
   $("#profile-avatar").addEventListener("click", chooseProfileAvatar);
   $("#profile-avatar").addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseProfileAvatar(); } });
+  const meProfileAvatar = $("#me-profile-avatar");
+  if (meProfileAvatar) {
+    meProfileAvatar.addEventListener("click", chooseProfileAvatar);
+    meProfileAvatar.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseProfileAvatar(); } });
+  }
 
   function openAddContactModal() {
     const overlay = document.createElement("div"); overlay.className = "modal-overlay contact-modal-overlay";
