@@ -74,13 +74,16 @@
   function allCards() { return [...BASE_CARDS, ...state.customCards]; }
   function showModal(title, message, symbol = "✦", options = {}) {
     $("#modal-title").textContent = title; $("#modal-text").textContent = message; $("#modal-symbol").textContent = symbol;
-    $("#modal-cancel").hidden = !options.confirm; $("#modal-ok").textContent = options.okText || (options.confirm ? "Confirm" : "Okay");
+    $("#modal-extra").replaceChildren();
+    $("#modal-cancel").hidden = !options.confirm; $("#modal-ok").hidden = false;
+    $("#modal-ok").textContent = options.okText || (options.confirm ? "Confirm" : "Okay");
     $("#modal").hidden = false;
     return new Promise(resolve => { modalResolver = resolve; });
   }
   function closeModal(result = false) { $("#modal").hidden = true; if (modalResolver) { modalResolver(result); modalResolver = null; } }
 
   function renderLayout() {
+    if (!(activeTab === "message" && inChat)) { $("#extension-panel").hidden = true; $("#sticker-tray").hidden = true; }
     const messageListVisible = activeTab === "message" && !inChat;
     $("#page-message").hidden = !messageListVisible;
     $("#page-chat").hidden = !(activeTab === "message" && inChat);
@@ -126,9 +129,56 @@
   }
   function appendMessageElement(container, message) {
     const group = document.createElement("div"); group.className = `message ${message.type === "sent" ? "sent" : "received"}`;
-    const bubble = document.createElement("div"); bubble.className = "bubble"; bubble.textContent = message.text;
+    if (message.kind === "poll") {
+      const card = document.createElement("article"); card.className = "special-card poll-card";
+      const kicker = document.createElement("div"); kicker.className = "special-kicker"; kicker.textContent = "✦ QUICK QUESTION";
+      const question = document.createElement("strong"); question.className = "poll-question"; question.textContent = message.poll?.question || "A little question";
+      const hint = document.createElement("p"); hint.className = "special-hint"; hint.textContent = message.votedIndex == null ? "点击一个选项，模拟 TA 作答" : "TA 已经做出选择";
+      const options = document.createElement("div"); options.className = "poll-options";
+      (message.poll?.options || []).forEach((option, index) => {
+        const button = document.createElement("button"); button.type = "button"; button.className = "poll-choice";
+        if (message.votedIndex === index) button.classList.add("chosen");
+        button.textContent = `${String.fromCharCode(65 + index)}. ${option}`;
+        button.disabled = message.votedIndex != null;
+        button.addEventListener("click", () => answerPoll(message.id, index));
+        options.append(button);
+      });
+      card.append(kicker, question, hint, options); group.append(card);
+    } else if (message.kind === "transfer") {
+      const card = document.createElement("button"); card.type = "button"; card.className = `special-card transfer-card ${message.transferType === "红包" ? "redpacket" : "money-transfer"}`;
+      const seal = document.createElement("span"); seal.className = "packet-seal"; seal.textContent = message.transferType === "红包" ? "福" : "¥";
+      const copy = document.createElement("span"); copy.className = "transfer-copy";
+      const label = document.createElement("strong"); label.textContent = message.transferType === "红包" ? "恭喜发财，大吉大利" : "转账给你";
+      const amount = document.createElement("span"); amount.className = "transfer-amount"; amount.textContent = `¥ ${Number(message.amount || 0).toFixed(2)}`;
+      const note = document.createElement("small"); note.textContent = message.note || "点击查看这份小心意";
+      copy.append(label, amount, note); card.append(seal, copy);
+      card.addEventListener("click", () => showModal(message.transferType === "红包" ? "红包已打开" : "转账详情", `${message.note || "这是一份来自梦境的模拟小心意。"} 金额：¥${Number(message.amount || 0).toFixed(2)}。这只是网页演示，不会产生真实支付。`, "✉"));
+      group.append(card);
+    } else if (message.kind === "music") {
+      const card = document.createElement("article"); card.className = "special-card music-card";
+      const disc = document.createElement("div"); disc.className = "record-disc"; disc.innerHTML = '<span class="record-center">♫</span>';
+      const copy = document.createElement("div"); copy.className = "music-copy";
+      const kicker = document.createElement("div"); kicker.className = "special-kicker"; kicker.textContent = "NOW PLAYING · MIXTAPE";
+      const title = document.createElement("strong"); title.className = "music-title"; title.textContent = message.track || "Untitled track";
+      const artist = document.createElement("span"); artist.className = "music-artist"; artist.textContent = message.artist || "Unknown artist";
+      const note = document.createElement("small"); note.textContent = message.note || "a song I wanted you to hear";
+      const play = document.createElement("button"); play.type = "button"; play.className = "music-play"; play.textContent = "▶ Play preview";
+      play.addEventListener("click", () => { const playing = play.dataset.playing !== "true"; play.dataset.playing = String(playing); play.textContent = playing ? "Ⅱ Pause preview" : "▶ Play preview"; disc.classList.toggle("spinning", playing); });
+      copy.append(kicker, title, artist, note, play); card.append(disc, copy); group.append(card);
+    } else if (message.kind === "voice") {
+      const bubble = document.createElement("button"); bubble.type = "button"; bubble.className = "bubble voice-bubble";
+      const play = document.createElement("span"); play.className = "voice-play"; play.textContent = "▶";
+      const wave = document.createElement("span"); wave.className = "voice-wave";
+      [6, 12, 18, 9, 22, 14, 7, 17, 10, 21, 8, 14, 5].forEach(height => { const bar = document.createElement("i"); bar.style.height = `${height}px`; wave.append(bar); });
+      const duration = document.createElement("span"); duration.className = "voice-duration"; duration.textContent = `0:${String(message.duration || 3).padStart(2, "0")}`;
+      bubble.append(play, wave, duration); bubble.addEventListener("click", () => showModal("Voice message", "这是一条模拟语音消息，当前 Demo 没有录制或播放真实音频。", "♫")); group.append(bubble);
+    } else if (message.kind === "sticker") {
+      const bubble = document.createElement("div"); bubble.className = "bubble sticker-bubble"; bubble.textContent = message.text || "♡"; group.append(bubble);
+    } else {
+      const bubble = document.createElement("div"); bubble.className = "bubble"; bubble.textContent = message.text || ""; group.append(bubble);
+    }
     const meta = document.createElement("div"); meta.className = "message-meta"; meta.textContent = `${message.time || nowTime()} ${message.type === "sent" ? "Delivered" : "Read"}`;
-    group.append(bubble, meta); container.append(group);
+    group.append(meta); container.append(group);
   }
   function saveMemoryItem(type, title, text, date = todayKey()) {
     state.savedItems.unshift({ id: uid(), date, type, title, text, createdAt: Date.now() });
@@ -148,10 +198,87 @@
   }
   function sendMessage(text) {
     const value = text.trim(); if (!value) return;
+    sendSpecialMessage({ text: value }, true);
+    $("#message-input").value = "";
+  }
+  function sendSpecialMessage(payload, shouldReply = true) {
     const id = activeContactId; if (!state.messages[id]) state.messages[id] = [];
-    state.messages[id].push({ text: value, type: "sent", time: nowTime() }); state.previews[id] = value;
-    saveState(); $("#message-input").value = ""; renderMessages(); renderConversations();
-    window.setTimeout(() => receiveCard(id), 550);
+    $("#extension-panel").hidden = true; $("#sticker-tray").hidden = true;
+    const message = { ...payload, id: payload.id || uid(), type: "sent", time: nowTime() };
+    state.messages[id].push(message);
+    state.previews[id] = message.text || message.poll?.question || (message.kind === "transfer" ? `${message.transferType} ¥${message.amount}` : message.kind === "music" ? `♫ ${message.track}` : message.kind === "voice" ? "[语音消息]" : "[表情贴纸]");
+    saveState(); renderMessages(); renderConversations();
+    if (shouldReply) window.setTimeout(() => receiveCard(id), 550);
+  }
+  function answerPoll(messageId, optionIndex) {
+    const messages = state.messages[activeContactId] || [];
+    const poll = messages.find(item => item.id === messageId && item.kind === "poll");
+    if (!poll || poll.votedIndex != null || !poll.poll?.options?.[optionIndex]) return;
+    poll.votedIndex = optionIndex;
+    messages.push({ id: uid(), text: `我选「${poll.poll.options[optionIndex]}」。你呢？`, type: "received", time: nowTime() });
+    state.previews[activeContactId] = `我选「${poll.poll.options[optionIndex]}」`;
+    saveState(); renderMessages(); renderConversations();
+  }
+  function toggleComposerPanel(panelName) {
+    const extension = $("#extension-panel"); const stickers = $("#sticker-tray");
+    if (panelName === "extension") { const shouldOpen = extension.hidden; extension.hidden = !shouldOpen; stickers.hidden = true; }
+    else if (panelName === "stickers") { const shouldOpen = stickers.hidden; stickers.hidden = !shouldOpen; extension.hidden = true; }
+  }
+  function addModalField(parent, labelText, options = {}) {
+    const field = document.createElement("label"); field.className = "modal-field"; field.textContent = labelText;
+    let input;
+    if (options.tag === "textarea") { input = document.createElement("textarea"); input.rows = options.rows || 3; }
+    else if (options.tag === "select") { input = document.createElement("select"); (options.choices || []).forEach(choice => { const option = document.createElement("option"); option.value = choice.value; option.textContent = choice.label; input.append(option); }); }
+    else { input = document.createElement("input"); input.type = options.type || "text"; }
+    input.className = "retro-form-control"; input.placeholder = options.placeholder || ""; input.value = options.value || "";
+    if (options.required) input.required = true;
+    if (options.min != null) input.min = options.min;
+    if (options.maxLength) input.maxLength = options.maxLength;
+    field.append(input); parent.append(field); return input;
+  }
+  async function composeExtension(kind) {
+    $("#extension-panel").hidden = true;
+    if (kind === "transfer") {
+      const pending = showModal("红包 / 转账", "送出一份小心意。此功能仅模拟界面，不会真实支付。", "✉", { confirm: true, okText: "Send" });
+      const extra = $("#modal-extra");
+      const transferType = addModalField(extra, "功能类型", { tag: "select", choices: [{ value: "红包", label: "红包 / Red packet" }, { value: "转账", label: "转账 / Transfer" }] });
+      const amount = addModalField(extra, "金额（元）", { type: "number", value: "52.00", min: "0.01", required: true });
+      const note = addModalField(extra, "附上一句话", { value: "买杯热可可，别着凉。", maxLength: 100 });
+      if (!await pending) return;
+      const numericAmount = Number(amount.value);
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0) { showModal("金额不正确", "请输入大于 0 的有效金额。", "!"); return; }
+      sendSpecialMessage({ kind: "transfer", transferType: transferType.value, amount: numericAmount, note: note.value.trim() });
+    } else if (kind === "poll") {
+      const pending = showModal("互动小问卷", "写一个问题，并把每个选项单独放在一行。至少需要两个选项。", "☷", { confirm: true, okText: "Send poll" });
+      const extra = $("#modal-extra");
+      const question = addModalField(extra, "你的问题", { value: "今晚想和我做什么？", required: true, maxLength: 120 });
+      const options = addModalField(extra, "选项（每行一个）", { tag: "textarea", value: "一起看电影\n去散步\n待在家里", rows: 4, required: true, maxLength: 360 });
+      if (!await pending) return;
+      const choices = [...new Set(options.value.split("\n").map(item => item.trim()).filter(Boolean))].slice(0, 6);
+      if (!question.value.trim() || choices.length < 2) { showModal("问卷还没准备好", "请填写问题，并提供至少两个不同的选项。", "☷"); return; }
+      sendSpecialMessage({ kind: "poll", poll: { question: question.value.trim(), options: choices, votedIndex: null } });
+    } else if (kind === "music") {
+      const pending = showModal("分享音乐", "制作一张复古 mixtape 卡片。试听按钮为视觉模拟，不会播放真实音频。", "♫", { confirm: true, okText: "Share track" });
+      const extra = $("#modal-extra");
+      const track = addModalField(extra, "歌曲名称", { value: "Somewhere Only We Know", required: true, maxLength: 100 });
+      const artist = addModalField(extra, "歌手 / Artist", { value: "Keane", maxLength: 80 });
+      const note = addModalField(extra, "想对 TA 说", { value: "听到这首歌，就想起你了。", maxLength: 100 });
+      if (!await pending) return;
+      if (!track.value.trim()) { showModal("还没填写歌曲名称", "给这首歌起一个名字再分享吧。", "♫"); return; }
+      sendSpecialMessage({ kind: "music", track: track.value.trim(), artist: artist.value.trim(), note: note.value.trim() });
+    }
+  }
+  async function recordVoiceMessage() {
+    const ready = await showModal("Voice memo", "开始后会发送一条 3 秒的模拟语音消息。本 Demo 不会访问麦克风或录制真实声音。", "♬", { confirm: true, okText: "Start recording" });
+    if (!ready) return;
+    $("#voice-btn").classList.add("recording");
+    $("#modal").hidden = false;
+    $("#modal-title").textContent = "Recording…"; $("#modal-text").textContent = "正在模拟录音，请稍等片刻。"; $("#modal-symbol").textContent = "◉";
+    $("#modal-cancel").hidden = true; $("#modal-ok").hidden = true;
+    window.setTimeout(() => {
+      closeModal(false); $("#voice-btn").classList.remove("recording");
+      sendSpecialMessage({ kind: "voice", duration: 3, text: "[语音消息 · 0:03]" });
+    }, 1200);
   }
 
   function renderNotes() {
@@ -255,7 +382,14 @@
   $$(".tab-item").forEach(button => button.addEventListener("click", () => switchTab(button.dataset.tab)));
   $("#back-btn").addEventListener("click", () => { if (inChat) { inChat = false; renderLayout(); renderConversations(); } else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; renderLayout(); renderNotes(); } });
   $("#composer").addEventListener("submit", event => { event.preventDefault(); sendMessage($("#message-input").value); });
-  $("#camera-btn").addEventListener("click", () => showModal("Camera", "这是一个网页界面 Demo，暂不调用设备相机。", "◎"));
+  $("#more-btn").addEventListener("click", () => toggleComposerPanel("extension"));
+  $("#sticker-btn").addEventListener("click", () => toggleComposerPanel("stickers"));
+  $("#close-extension").addEventListener("click", () => { $("#extension-panel").hidden = true; });
+  $("#close-stickers").addEventListener("click", () => { $("#sticker-tray").hidden = true; });
+  $$("[data-extension]").forEach(button => button.addEventListener("click", () => composeExtension(button.dataset.extension)));
+  $$("[data-sticker]").forEach(button => button.addEventListener("click", () => { const sticker = button.dataset.sticker; $("#sticker-tray").hidden = true; sendSpecialMessage({ kind: "sticker", text: sticker }, true); }));
+  $("#camera-btn").addEventListener("click", () => showModal("Camera", "这是一个复古界面 Demo，目前不会调用设备相机或上传真实照片。", "▣"));
+  $("#voice-btn").addEventListener("click", recordVoiceMessage);
   $$(".action-btn").forEach(button => button.addEventListener("click", () => {
     const actions = { call: ["Call", "正在模拟拨打语音电话……对方暂时无法接听。", "☎"], facetime: ["FaceTime", "正在连接视频信号……这是视觉演示，不会发起真实视频通话。", "▣"], contact: ["Contact", "联系人卡片已打开。转账为视觉模拟，不会发起真实支付。", "♙"] };
     showModal(...actions[button.dataset.action]);

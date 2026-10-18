@@ -27,7 +27,28 @@
       <section class="page chat-page" id="page-chat" hidden>
         <div class="action-bar"><button class="action-btn" data-action="call">Call</button><button class="action-btn" data-action="facetime">FaceTime</button><button class="action-btn" data-action="contact">Contact</button></div>
         <div class="date-divider"><span>Today</span></div><div class="chat-messages" id="chat-messages" aria-live="polite"></div>
-        <form class="composer" id="composer"><button class="camera-btn" type="button" id="camera-btn" aria-label="Camera">◎</button><input id="message-input" type="text" autocomplete="off" placeholder="Send..." aria-label="Type a message"><button class="send-btn" type="submit">Send</button></form>
+        <section class="extension-panel" id="extension-panel" hidden aria-label="More chat functions">
+          <div class="panel-title-row"><strong>More little things</strong><button class="panel-close" id="close-extension" type="button" aria-label="Close panel">×</button></div>
+          <div class="extension-options">
+            <button class="extension-option" type="button" data-extension="transfer"><span class="extension-icon envelope-icon">✉</span><span>红包 / 转账</span></button>
+            <button class="extension-option" type="button" data-extension="poll"><span class="extension-icon poll-icon">☷</span><span>互动小问卷</span></button>
+            <button class="extension-option" type="button" data-extension="music"><span class="extension-icon music-icon">♫</span><span>分享音乐</span></button>
+          </div>
+        </section>
+        <section class="sticker-tray" id="sticker-tray" hidden aria-label="Sticker picker">
+          <div class="panel-title-row"><strong>Stickers & little faces</strong><button class="panel-close" id="close-stickers" type="button" aria-label="Close stickers">×</button></div>
+          <div class="sticker-grid" id="sticker-grid">
+            <button type="button" data-sticker="♡">♡</button><button type="button" data-sticker="(｡•́︿•̀｡)">(｡•́︿•̀｡)</button><button type="button" data-sticker="(｡♥‿♥｡)">(｡♥‿♥｡)</button><button type="button" data-sticker=":3">:3</button><button type="button" data-sticker="(╥﹏╥)">(╥﹏╥)</button><button type="button" data-sticker="(¬_¬)">(¬_¬)</button><button type="button" data-sticker="✧･ﾟ">✧･ﾟ</button><button type="button" data-sticker="(づ｡◕‿‿◕｡)づ">(づ｡◕‿‿◕｡)づ</button><button type="button" data-sticker="xoxo">xoxo</button><button type="button" data-sticker="( ˘ ³˘)♥">( ˘ ³˘)♥</button><button type="button" data-sticker="T_T">T_T</button><button type="button" data-sticker="★彡">★彡</button>
+          </div>
+        </section>
+        <form class="composer" id="composer">
+          <button class="composer-icon more-btn" type="button" id="more-btn" aria-label="More functions" title="More functions"><span>＋</span></button>
+          <button class="composer-icon camera-btn" type="button" id="camera-btn" aria-label="Camera" title="Camera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h3l1.4-2h7.2l1.4 2h3A1.5 1.5 0 0 1 21.5 9v9A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18V9A1.5 1.5 0 0 1 4 7.5Z"/><circle cx="12" cy="13.5" r="4"/><circle cx="18" cy="10" r=".8"/></svg></button>
+          <button class="composer-icon sticker-btn" type="button" id="sticker-btn" aria-label="Stickers" title="Stickers"><span>☺</span><i>✦</i></button>
+          <button class="composer-icon voice-btn" type="button" id="voice-btn" aria-label="Voice message" title="Voice message"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8"/></svg></button>
+          <input id="message-input" type="text" autocomplete="off" placeholder="Send..." aria-label="Type a message">
+          <button class="send-btn" type="submit">Send</button>
+        </form>
       </section>
 
       <section class="page notes-page" id="page-notes" hidden>
@@ -73,7 +94,7 @@
       </section>
     </div>
     <nav class="tab-bar" aria-label="Main navigation"><button class="tab-item active" data-tab="message"><span class="tab-icon">●</span><span>Message</span></button><button class="tab-item" data-tab="notes"><span class="tab-icon">▤</span><span>Notes</span></button><button class="tab-item" data-tab="saved"><span class="tab-icon compass">◉</span><span>Saved</span><b class="tab-dot"></b></button><button class="tab-item" data-tab="me"><span class="tab-icon">◐</span><span>Me</span></button></nav>
-    <div class="modal-overlay" id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-symbol" id="modal-symbol">✦</div><h2 id="modal-title">Notice</h2><p id="modal-text"></p><div class="modal-buttons"><button class="small-blue-btn secondary" id="modal-cancel">Cancel</button><button class="done-btn modal-ok" id="modal-ok">Okay</button></div></div></div>
+    <div class="modal-overlay" id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-symbol" id="modal-symbol">✦</div><h2 id="modal-title">Notice</h2><p id="modal-text"></p><div class="modal-extra" id="modal-extra"></div><div class="modal-buttons"><button class="small-blue-btn secondary" id="modal-cancel">Cancel</button><button class="done-btn modal-ok" id="modal-ok">Okay</button></div></div></div>
   </section>
   <p class="outside-caption">RETRO OTOME · MEMORIES OF ANOTHER TIME</p>
 </main>
