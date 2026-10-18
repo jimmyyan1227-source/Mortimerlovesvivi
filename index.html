@@ -11,11 +11,10 @@
 <body>
 <main class="stage">
   <section class="phone" aria-label="Retro Otome 应用">
-    <header class="topbar"><button class="chrome-btn" id="back-btn" hidden>‹ Back</button><div class="top-title" id="top-title">Message</div><button class="chrome-btn" id="top-action">Edit</button></header>
+    <header class="topbar"><button class="chrome-btn" id="back-btn" hidden>‹ Back</button><button class="chrome-btn" id="top-action">Edit</button><div class="top-title" id="top-title">Message</div><button class="add-contact-btn header-add-contact" id="add-contact-btn" type="button" aria-label="添加联系人" title="添加联系人"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3.2"/><path d="M2.8 19c.3-3.5 2.5-5.4 6.2-5.4 2.1 0 3.7.6 4.8 1.8M18 8v8M14 12h8"/></svg></button></header>
     <div class="screen">
       <section class="page list-page" id="page-message">
         <article class="profile-card">
-          <button class="add-contact-btn" id="add-contact-btn" type="button" aria-label="添加联系人" title="添加联系人"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3.2"/><path d="M2.8 19c.3-3.5 2.5-5.4 6.2-5.4 2.1 0 3.7.6 4.8 1.8M18 8v8M14 12h8"/></svg></button>
           <img class="profile-avatar" id="profile-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=180&fit=crop&crop=faces" alt="Profile avatar" role="button" tabindex="0" title="点击更换头像">
           <div class="profile-counts"><div><strong id="photo-count">8</strong><span>photos</span></div><div><strong id="follower-count">4</strong><span>followers</span></div><div><strong id="following-count">8</strong><span>following</span></div><button class="done-btn" id="profile-done">Done</button></div>
           <div class="profile-caption"><strong id="profile-name">heartYEAH:)</strong><span id="profile-signature">A leaf that remains evergreen</span></div>
@@ -100,14 +99,30 @@
           <div class="card-form-footer"><label class="group-select-label" for="custom-card-group">加入分组<select id="custom-card-group"><option value="">不分组 / Ungrouped</option></select></label><button class="small-blue-btn" type="submit">＋ 批量添加</button></div>
         </form>
         <div class="card-import-row"><input id="card-file-input" type="file" accept=".txt,.csv,text/plain,text/csv" hidden><button class="small-blue-btn secondary" type="button" id="import-card-file">⇧ 导入 .TXT / .CSV</button><span>按行解析，自动跳过重复内容</span></div>
-        <div class="card-subheading"><strong>字卡列表 / Card Status</strong><span>单条开关可独立控制</span></div>
-        <div class="custom-card-list" id="custom-card-list"></div>
+        <div class="card-subheading card-list-heading"><button class="section-collapse-btn" id="toggle-card-list" type="button" aria-expanded="true"><span class="collapse-chevron" aria-hidden="true">▾</span><strong>字卡列表 / Card Status</strong></button><span>单条开关可独立控制</span></div>
+        <div id="card-list-content">
+          <div class="batch-toolbar" id="batch-toolbar">
+            <label class="batch-select-all"><input type="checkbox" id="select-all-cards"><span>全选当前字卡</span></label>
+            <span class="batch-selected-count" id="batch-selected-count">已选 0 张</span>
+            <div class="batch-actions">
+              <label class="batch-group-label" for="batch-target-group"><select id="batch-target-group" aria-label="批量移动目标分组"><option value="">移动至未分组</option></select></label>
+              <button class="small-blue-btn" type="button" id="batch-move-cards">移动</button>
+              <button class="small-blue-btn secondary batch-delete-btn" type="button" id="batch-delete-cards">删除所选</button>
+            </div>
+          </div>
+          <div class="custom-card-list" id="custom-card-list"></div>
+        </div>
         <div class="me-section-title custom-heading">DATA & SETTINGS</div>
         <button class="setting-row" id="export-data"><span>Export local data / 导出数据</span><span>JSON　›</span></button><button class="setting-row" id="reset-data"><span>Reset demo / 重置数据</span><span>›</span></button>
         <p class="settings-note">记录保存在当前浏览器中。此 Demo 的电话、视频和 Contact 按钮仅为交互演示，不会发起真实通话或支付。</p>
       </section>
     </div>
-    <nav class="tab-bar" aria-label="Main navigation"><button class="tab-item active" data-tab="message"><span class="tab-icon">●</span><span>Message</span></button><button class="tab-item" data-tab="notes"><span class="tab-icon">▤</span><span>Notes</span></button><button class="tab-item" data-tab="saved"><span class="tab-icon compass">◉</span><span>Saved</span><b class="tab-dot"></b></button><button class="tab-item" data-tab="me"><span class="tab-icon">◐</span><span>Me</span></button></nav>
+    <nav class="tab-bar" aria-label="Main navigation">
+      <button class="tab-item active" data-tab="message"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 32 28" class="glyph-envelope"><rect class="glyph-body" x="3" y="4" width="26" height="20" rx="3"/><path class="glyph-detail" d="M4.5 6 16 15.5 27.5 6M4.5 22 12 14.5M27.5 22 20 14.5"/></svg></span><span>Message</span></button>
+      <button class="tab-item" data-tab="notes"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 32 28" class="glyph-notes"><rect class="glyph-body" x="7" y="2.5" width="19" height="23" rx="2"/><path class="glyph-detail" d="M11 2.5v23M14 8h8M14 13h8M14 18h7M5 5v18"/></svg></span><span>Notes</span></button>
+      <button class="tab-item" data-tab="saved"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 32 28"><path d="m16 2.5 4 7.6 8.5 1.2-6.2 6 1.5 8.2-7.8-4.1-7.8 4.1 1.5-8.2-6.2-6 8.5-1.2Z"/></svg></span><span>Saved</span><b class="tab-dot"></b></button>
+      <button class="tab-item" data-tab="me"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 32 28" class="glyph-me"><rect class="glyph-frame" x="3" y="2.5" width="26" height="23" rx="3"/><circle class="glyph-person" cx="16" cy="10" r="4"/><path class="glyph-person" d="M8 22c.7-4 3.3-6 8-6s7.3 2 8 6Z"/></svg></span><span>Me</span></button>
+    </nav>
     <div class="modal-overlay" id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-symbol" id="modal-symbol">✦</div><h2 id="modal-title">Notice</h2><p id="modal-text"></p><div class="modal-extra" id="modal-extra"></div><div class="modal-buttons"><button class="small-blue-btn secondary" id="modal-cancel">Cancel</button><button class="done-btn modal-ok" id="modal-ok">Okay</button></div></div></div>
   </section>
   <p class="outside-caption">RETRO OTOME · MEMORIES OF ANOTHER TIME</p>

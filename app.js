@@ -87,6 +87,10 @@
   let pressStart = null;
   let suppressMessageClickUntil = 0;
   let openMessageMenuId = null;
+  const CARD_UI_KEY = "retroOtome_cardLibraryUI_v1";
+  let cardUI = (() => { try { return { listCollapsed: false, collapsedGroups: {}, ...(JSON.parse(localStorage.getItem(CARD_UI_KEY) || "{}")) }; } catch { return { listCollapsed: false, collapsedGroups: {} }; } })();
+  const selectedCardIds = new Set();
+  function saveCardUI() { try { localStorage.setItem(CARD_UI_KEY, JSON.stringify(cardUI)); } catch {} }
 
   function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (error) { console.warn("Local storage could not be written.", error); } }
   function nowTime() { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
@@ -158,6 +162,7 @@
     $("#back-btn").hidden = !(inChat || (activeTab === "notes" && !$("#note-editor").hidden));
     $("#top-action").hidden = false;
     $(".tab-bar").hidden = activeTab === "message" && inChat;
+    $("#add-contact-btn").hidden = !(activeTab === "message" && !inChat);
     $(".phone").classList.toggle("chat-immersive", activeTab === "message" && inChat);
     const titles = { message: inChat ? currentContact().name : "Message", notes: $("#note-editor").hidden ? "Notes" : "Note Editor", saved: "Saved", me: "Me" };
     $("#top-title").textContent = titles[activeTab];
@@ -819,6 +824,7 @@
     renderCardGroups();
     renderManagedCards();
     renderCardGroupSelect();
+    renderBatchTargetSelect();
     const batchInput = $("#custom-card-batch");
     if (batchInput && !batchInput.value) batchInput.placeholder = "一行一句，可一次粘贴多张字卡……";
   }
@@ -839,6 +845,14 @@
     state.cardGroups.forEach(group => {
       const option = document.createElement("option"); option.value = group.id; option.textContent = `${group.name}${group.enabled ? "" : "（已禁用）"}`; select.append(option);
     });
+    if ([...select.options].some(option => option.value === prior)) select.value = prior;
+  }
+
+  function renderBatchTargetSelect() {
+    const select = $("#batch-target-group"); if (!select) return;
+    const prior = select.value; select.replaceChildren();
+    const ungrouped = document.createElement("option"); ungrouped.value = ""; ungrouped.textContent = "移动至未分组"; select.append(ungrouped);
+    state.cardGroups.forEach(group => { const option = document.createElement("option"); option.value = group.id; option.textContent = group.name; select.append(option); });
     if ([...select.options].some(option => option.value === prior)) select.value = prior;
   }
 
@@ -872,21 +886,58 @@
     });
   }
 
+  function syncBatchToolbar() {
+    const count = selectedCardIds.size;
+    const countEl = $("#batch-selected-count"); if (countEl) countEl.textContent = `已选 ${count} 张`;
+    const all = $("#select-all-cards");
+    if (all) { all.checked = state.customCards.length > 0 && count === state.customCards.length; all.indeterminate = count > 0 && count < state.customCards.length; }
+    const move = $("#batch-move-cards"), del = $("#batch-delete-cards");
+    if (move) move.disabled = count === 0;
+    if (del) del.disabled = count === 0;
+  }
+
   function renderManagedCards() {
     const container = $("#custom-card-list");
     container.replaceChildren();
+    const listContent = $("#card-list-content"), listToggle = $("#toggle-card-list");
+    if (listContent) listContent.hidden = Boolean(cardUI.listCollapsed);
+    if (listToggle) { listToggle.setAttribute("aria-expanded", String(!cardUI.listCollapsed)); const chevron = $(".collapse-chevron", listToggle); if (chevron) chevron.textContent = cardUI.listCollapsed ? "▸" : "▾"; }
     if (!state.customCards.length) {
       const empty = document.createElement("div"); empty.className = "empty-message";
       empty.textContent = "字卡库目前为空。添加或导入你自己的短句后，已启用的字卡才会参与随机回复。";
-      container.append(empty); return;
+      container.append(empty); syncBatchToolbar(); return;
     }
     const sections = [{ id: "", name: "未分组 / Ungrouped" }, ...state.cardGroups.map(group => ({ id: group.id, name: group.name }))];
     sections.forEach(section => {
       const cards = state.customCards.filter(card => card.groupId === section.id || (section.id === "" && !card.groupId));
       if (!cards.length) return;
-      const title = document.createElement("div"); title.className = "managed-group-label"; title.textContent = `${section.name} · ${cards.length}`; container.append(title);
+      const groupCollapsed = Boolean(cardUI.collapsedGroups[section.id || "__ungrouped__"]);
+      const group = document.createElement("section"); group.className = `managed-card-group${groupCollapsed ? " is-collapsed" : ""}`;
+      const header = document.createElement("div"); header.className = "managed-group-header";
+      const title = document.createElement("button"); title.type = "button"; title.className = "managed-group-label"; title.setAttribute("aria-expanded", String(!groupCollapsed));
+      const chevron = document.createElement("span"); chevron.className = "managed-group-chevron"; chevron.textContent = groupCollapsed ? "▸" : "▾";
+      const label = document.createElement("span"); label.className = "managed-group-name"; label.textContent = section.name;
+      const count = document.createElement("span"); count.className = "managed-group-count"; count.textContent = String(cards.length);
+      title.append(chevron, label, count);
+      const groupPickLabel = document.createElement("label"); groupPickLabel.className = "group-select-cards"; groupPickLabel.title = `选择${section.name}全部字卡`;
+      const groupPick = document.createElement("input"); groupPick.type = "checkbox"; groupPick.setAttribute("aria-label", `选择${section.name}全部字卡`);
+      const selectedInGroup = cards.filter(card => selectedCardIds.has(card.id)).length;
+      groupPick.checked = cards.length > 0 && selectedInGroup === cards.length;
+      groupPick.indeterminate = selectedInGroup > 0 && selectedInGroup < cards.length;
+      groupPick.addEventListener("change", () => {
+        cards.forEach(card => groupPick.checked ? selectedCardIds.add(card.id) : selectedCardIds.delete(card.id));
+        renderManagedCards();
+      });
+      groupPickLabel.append(groupPick);
+      header.append(title, groupPickLabel);
+      const rows = document.createElement("div"); rows.className = "managed-group-cards"; rows.hidden = groupCollapsed;
+      title.addEventListener("click", () => { const key = section.id || "__ungrouped__"; cardUI.collapsedGroups[key] = !cardUI.collapsedGroups[key]; saveCardUI(); renderManagedCards(); });
       cards.forEach(card => {
-        const row = document.createElement("div"); row.className = `custom-card-item${isCardActive(card) ? " is-active" : " is-inactive"}`;
+        const row = document.createElement("div"); row.className = `custom-card-item${isCardActive(card) ? " is-active" : " is-inactive"}${selectedCardIds.has(card.id) ? " is-selected" : ""}`;
+        const pickLabel = document.createElement("label"); pickLabel.className = "card-pick-label"; pickLabel.title = "选择这张字卡";
+        const pick = document.createElement("input"); pick.type = "checkbox"; pick.checked = selectedCardIds.has(card.id); pick.setAttribute("aria-label", `选择字卡：${card.text}`);
+        pick.addEventListener("change", () => { if (pick.checked) selectedCardIds.add(card.id); else selectedCardIds.delete(card.id); row.classList.toggle("is-selected", pick.checked); syncBatchToolbar(); });
+        const pickFace = document.createElement("span"); pickFace.className = "retro-checkbox-face"; pickLabel.append(pick, pickFace);
         const text = document.createElement("span"); text.className = "managed-card-text"; text.textContent = card.text;
         const activeLabel = document.createElement("label"); activeLabel.className = "retro-switch card-switch"; activeLabel.title = "单条字卡启用状态";
         const toggle = document.createElement("input"); toggle.type = "checkbox"; toggle.checked = card.enabled; toggle.setAttribute("aria-label", `启用字卡：${card.text}`);
@@ -894,9 +945,11 @@
         const slider = document.createElement("span"); slider.className = "retro-slider"; activeLabel.append(toggle, slider);
         const edit = document.createElement("button"); edit.type = "button"; edit.className = "tiny-metal-btn"; edit.textContent = "Edit"; edit.addEventListener("click", () => editCard(card.id));
         const del = document.createElement("button"); del.type = "button"; del.className = "tiny-metal-btn danger"; del.textContent = "×"; del.setAttribute("aria-label", "Delete card"); del.addEventListener("click", () => deleteCard(card.id));
-        row.append(text, activeLabel, edit, del); container.append(row);
+        row.append(pickLabel, text, activeLabel, edit, del); rows.append(row);
       });
+      group.append(header, rows); container.append(group);
     });
+    syncBatchToolbar();
   }
 
   async function addCardsFromText(text, groupId = "") {
@@ -988,7 +1041,7 @@
   async function deleteCard(cardId) {
     const card = state.customCards.find(item => item.id === cardId); if (!card) return;
     if (!await showModal("删除这张字卡？", card.text, "!", { confirm: true, okText: "Delete" })) return;
-    state.customCards = state.customCards.filter(item => item.id !== cardId); saveState(); renderMe();
+    state.customCards = state.customCards.filter(item => item.id !== cardId); selectedCardIds.delete(cardId); saveState(); renderMe();
   }
 
   function preferenceSection(parent, title, subtitle = "") {
@@ -1158,6 +1211,24 @@
     state.cardGroups.forEach(group => { group.enabled = false; }); state.customCards.forEach(card => { card.enabled = false; });
     saveState(); renderMe(); showModal("全部已禁用", "所有字卡及分组均已关闭；聊天将不会抽取默认短句。", "⊘");
   });
+  $("#toggle-card-list").addEventListener("click", () => { cardUI.listCollapsed = !cardUI.listCollapsed; saveCardUI(); renderManagedCards(); });
+  $("#select-all-cards").addEventListener("change", event => { selectedCardIds.clear(); if (event.target.checked) state.customCards.forEach(card => selectedCardIds.add(card.id)); renderManagedCards(); });
+  $("#batch-move-cards").addEventListener("click", async () => {
+    const ids = new Set([...selectedCardIds].filter(id => state.customCards.some(card => card.id === id)));
+    if (!ids.size) return;
+    const target = $("#batch-target-group").value;
+    const targetName = state.cardGroups.find(group => group.id === target)?.name || "未分组 / Ungrouped";
+    if (!await showModal("批量移动字卡", `将选中的 ${ids.size} 张字卡移动到「${targetName}」？`, "⇢", { confirm: true, okText: "移动" })) return;
+    state.customCards.forEach(card => { if (ids.has(card.id)) card.groupId = target; }); selectedCardIds.clear(); saveState(); renderMe();
+    showModal("移动完成", `已将 ${ids.size} 张字卡移动到「${targetName}」。`, "✓");
+  });
+  $("#batch-delete-cards").addEventListener("click", async () => {
+    const ids = new Set([...selectedCardIds].filter(id => state.customCards.some(card => card.id === id)));
+    if (!ids.size) return;
+    if (!await showModal("批量删除字卡？", `即将删除选中的 ${ids.size} 张字卡。此操作无法撤销。`, "!", { confirm: true, okText: "删除" })) return;
+    state.customCards = state.customCards.filter(card => !ids.has(card.id)); selectedCardIds.clear(); saveState(); renderMe();
+    showModal("删除完成", `已删除 ${ids.size} 张字卡。`, "✓");
+  });
   $("#edit-profile").addEventListener("click", () => { const name = window.prompt("新的显示名称：", state.profileName); if (name !== null && name.trim()) { state.profileName = name.trim(); $("#profile-name").textContent = state.profileName; saveState(); renderMe(); } });
   $("#edit-signature").addEventListener("click", () => { const signature = window.prompt("输入个人签名：", state.signature); if (signature !== null) { state.signature = signature.trim(); $("#profile-signature").textContent = state.signature; saveState(); renderMe(); } });
   $("#export-data").addEventListener("click", downloadJson);
@@ -1199,12 +1270,11 @@
   function openAddContactModal() {
     const overlay = document.createElement("div"); overlay.className = "modal-overlay contact-modal-overlay";
     const card = document.createElement("form"); card.className = "modal-card contact-modal";
-    card.innerHTML = '<div class="modal-symbol">♙＋</div><h2>New Contact</h2><p>添加一位新的聊天联系人</p><label class="contact-avatar-picker"><img alt="头像预览" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces"><span>选择头像</span><input type="file" accept="image/*" hidden></label><label class="contact-name-label">角色名字<input class="contact-name-input" maxlength="40" placeholder="输入角色名字" required></label><div class="modal-buttons"><button class="chrome-btn contact-cancel" type="button">Cancel</button><button class="chrome-btn modal-ok" type="submit">Add Friend</button></div>';
+    card.innerHTML = '<div class="modal-symbol">♙＋</div><h2>New Contact</h2><p>添加一位新的聊天联系人</p><label class="contact-avatar-picker"><img alt="头像预览" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces"><span>选择头像</span><input class="contact-avatar-file" type="file" accept="image/*" aria-label="选择联系人头像"></label><label class="contact-name-label">角色名字<input class="contact-name-input" maxlength="40" placeholder="输入角色名字" required></label><div class="modal-buttons"><button class="chrome-btn contact-cancel" type="button">Cancel</button><button class="chrome-btn modal-ok" type="submit">Add Friend</button></div>';
     overlay.append(card); $(".phone").append(overlay);
     const fileInput = $("input[type=file]", card), preview = $(".contact-avatar-picker img", card), nameInput = $(".contact-name-input", card);
     let avatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop&crop=faces";
-    fileInput.addEventListener("change", async () => { try { if (fileInput.files?.[0]) { avatar = await readAvatarFile(fileInput.files[0]); preview.src = avatar; } } catch (error) { showModal("头像设置失败", error.message, "!"); } });
-    $(".contact-avatar-picker", card).addEventListener("click", event => { if (event.target !== fileInput) fileInput.click(); });
+    fileInput.addEventListener("change", async event => { const file = event.currentTarget.files && event.currentTarget.files[0]; if (!file) return; try { avatar = await readAvatarFile(file); preview.src = avatar; preview.dataset.customAvatar = "true"; } catch (error) { showModal("头像设置失败", error.message, "!"); } finally { fileInput.value = ""; } });
     $(".contact-cancel", card).addEventListener("click", () => overlay.remove());
     overlay.addEventListener("click", event => { if (event.target === overlay) overlay.remove(); });
     card.addEventListener("submit", event => {
