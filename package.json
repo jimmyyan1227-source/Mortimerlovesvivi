@@ -1,12 +1,9 @@
 {
-  "name": "retro-otome-deepl-proxy",
-  "version": "1.0.0",
+  "name": "retro-otome-github-pages",
+  "version": "1.1.0",
   "private": true,
-  "description": "Server-side DeepL proxy for the Retro Otome static web app",
+  "description": "Static Retro Otome web app for GitHub Pages; MyMemory translation and MiniMax TTS",
   "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
+    "start": "echo This is a static GitHub Pages project; no backend server is required."
   }
 }

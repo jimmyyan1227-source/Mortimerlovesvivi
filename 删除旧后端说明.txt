@@ -1,0 +1,1 @@
+本版本已将 DeepL 代理翻译改为 MyMemory 公开翻译接口。部署 GitHub Pages 只需上传 index.html、app.js、style.css。README.md 为更新后的说明。旧 server.js 不再需要，可从 GitHub 仓库删除；package.json 也不再用于运行翻译后端。

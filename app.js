@@ -98,7 +98,7 @@
     multiCardsEnabled: false, cardCount: 2, autoPunctuation: true, stickerEnabled: false,
     delayMin: 1, delayMax: 3, noReplyEnabled: true, replyProbability: 70,
     ttsEnabled: false, minimaxApiKey: "", minimaxGroupId: "", ttsModel: "speech-2.8-hd", voiceId: "", ttsLanguage: "原文", ttsSpeed: 1, ttsGender: "男", ttsEmotion: "温柔体贴", ttsCustomEmotion: "",
-    deeplApiKey: "", deeplProxyUrl: "", deeplApiType: "free", autoTranslateCards: false, showTranslatedText: true
+    autoTranslateCards: false, showTranslatedText: true
   });
   const RANDOM_STICKERS = ["ヽ(｡ゝω・｡)ﾉ", "(｡♥‿♥｡)", "( ˘ ³˘)♥", "♡", "(｡•̀ᴗ-)✧", "(づ｡◕‿‿◕｡)づ", "✧･ﾟ", "(¬‿¬)"];
   function getChatPreferences(contactId = activeContactId) {
@@ -302,18 +302,18 @@
           if (shouldTranslateVoice(prefs)) {
             try {
               if (!message.translationText || message.translationFailed) {
-                message.translationText = await translateWithDeepL(message.text || "", prefs);
+                message.translationText = await translateWithMyMemory(message.text || "", prefs);
                 message.translationFailed = false; message.translationError = ""; saveState();
               }
               speechText = message.translationText || speechText;
             } catch (translationError) {
-              message.translationFailed = true; message.translationError = translationError.message || "DeepL 翻译失败";
+              message.translationFailed = true; message.translationError = translationError.message || "MyMemory 翻译失败";
               message.translationText = ""; saveState();
               if (voicePrefs.showTranslatedText) {
                 const fallback = document.createElement("div"); fallback.className = "voice-translation voice-translation-fallback";
                 fallback.textContent = "✧ 翻译暂不可用，将尝试播放原文"; group.append(fallback);
               }
-              // Graceful fallback: speak the original card text if DeepL is unavailable.
+              // Graceful fallback: speak the original card text if MyMemory is unavailable.
             }
           }
           const audioUrl = await generateMiniMaxAudio(speechText, prefs); message.audioUrl = audioUrl; saveState();
@@ -450,53 +450,61 @@
   function markMessagesRead(contactId, type) {
     (state.messages[contactId] || []).forEach(message => { if (message.type === type) message.status = "Read"; });
   }
-  function deeplTargetLanguage(language) {
-    return ({ "英语": "EN-US", "日语": "JA", "韩语": "KO", "德语": "DE" })[language] || "";
+  function translationTargetLanguage(language) {
+    return ({ "英语": "en", "日语": "ja", "韩语": "ko", "德语": "de" })[language] || "";
   }
   function shouldTranslateVoice(prefs) {
-    return Boolean(prefs?.autoTranslateCards && String(prefs?.ttsLanguage || "原文") !== "原文" && deeplTargetLanguage(prefs.ttsLanguage));
+    return Boolean(prefs?.autoTranslateCards && String(prefs?.ttsLanguage || "原文") !== "原文" && translationTargetLanguage(prefs.ttsLanguage));
   }
-  async function translateWithDeepL(text, prefs) {
+  async function translateWithMyMemory(text, prefs) {
     const sourceText = String(text || "").trim();
     if (!sourceText) throw new Error("字卡文本为空，无法翻译。");
-    const proxyUrl = String(prefs?.deeplProxyUrl || "").trim().replace(/\/$/, "");
-    if (!proxyUrl) throw new Error("尚未配置翻译代理 URL。DeepL 不允许浏览器直接调用官方 API，请先部署后端代理并填写代理地址。");
-    const targetLang = deeplTargetLanguage(prefs.ttsLanguage);
+    const targetLang = translationTargetLanguage(prefs?.ttsLanguage);
     if (!targetLang) throw new Error("当前语音语言暂不支持自动翻译。");
-    let endpoint;
-    try { endpoint = new URL(proxyUrl).toString(); } catch (_) { throw new Error("翻译代理 URL 格式无效，请填写完整的 https:// 地址。"); }
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 15000);
-    let response;
-    try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: sourceText, target_lang: targetLang, apiType: prefs.deeplApiType === "pro" ? "pro" : "free" }),
-        signal: controller.signal
-      });
-    } catch (error) {
-      if (error?.name === "AbortError") throw new Error("翻译代理请求超时（15 秒）。请检查代理服务是否已启动，以及地址是否正确。");
-      throw new Error("无法连接翻译代理。请确认代理已部署、URL 正确且 CORS 已允许当前网页来源。" + (error?.message ? ` ${error.message}` : ""));
-    } finally { window.clearTimeout(timeout); }
-    const raw = await response.text();
-    let data = null; try { data = JSON.parse(raw); } catch (_) {}
-    if (!response.ok) {
-      const detail = data?.error || data?.message || data?.detail || raw.slice(0, 300) || response.statusText;
-      throw new Error(`翻译代理请求失败（HTTP ${response.status}）：${detail}`);
+
+    // MyMemory is a hosted public API. Split into short chunks to stay below request-size limits.
+    const chunks = [];
+    let remaining = sourceText;
+    while (remaining.length) {
+      if (new TextEncoder().encode(remaining).length <= 420) { chunks.push(remaining); break; }
+      let cut = Math.min(remaining.length, 300);
+      const boundary = Math.max(remaining.lastIndexOf("。", cut), remaining.lastIndexOf("！", cut), remaining.lastIndexOf("？", cut), remaining.lastIndexOf("\n", cut), remaining.lastIndexOf(". ", cut), remaining.lastIndexOf("! ", cut), remaining.lastIndexOf("? ", cut), remaining.lastIndexOf(" ", cut));
+      if (boundary > 80) cut = boundary + 1;
+      while (cut > 1 && new TextEncoder().encode(remaining.slice(0, cut)).length > 420) cut--;
+      chunks.push(remaining.slice(0, cut));
+      remaining = remaining.slice(cut).trimStart();
     }
-    const translated = data?.translations?.[0]?.text || data?.translation || data?.text;
-    if (!translated || typeof translated !== "string") throw new Error("代理已响应，但没有返回有效译文。请检查后端是否返回 { translations: [{ text: \"...\" }] } 格式。");
-    return translated.trim();
+
+    const translatedChunks = [];
+    for (const chunk of chunks) {
+      const params = new URLSearchParams({ q: chunk, langpair: `zh-CN|${targetLang}` });
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 15000);
+      let response;
+      try {
+        response = await fetch(`https://api.mymemory.translated.net/get?${params.toString()}`, { signal: controller.signal });
+      } catch (error) {
+        if (error?.name === "AbortError") throw new Error("MyMemory 翻译请求超时（15 秒），请稍后重试。");
+        throw new Error("无法连接 MyMemory 翻译服务。请检查网络或稍后重试。" + (error?.message ? ` ${error.message}` : ""));
+      } finally { window.clearTimeout(timeout); }
+      const raw = await response.text();
+      let data = null; try { data = JSON.parse(raw); } catch (_) {}
+      if (!response.ok) throw new Error(`MyMemory 请求失败（HTTP ${response.status}）：${data?.responseDetails || raw.slice(0, 200) || response.statusText}`);
+      const translated = data?.responseData?.translatedText;
+      if (!translated || typeof translated !== "string") throw new Error(data?.responseDetails || "MyMemory 没有返回有效译文。");
+      if (Number(data?.responseStatus) >= 400) throw new Error(data?.responseDetails || "MyMemory 暂时无法完成翻译。");
+      translatedChunks.push(translated.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">"));
+    }
+    return translatedChunks.join(" ").trim();
   }
   async function prepareVoiceTranslation(message, prefs) {
     if (!shouldTranslateVoice(prefs)) return;
     try {
-      message.translationText = await translateWithDeepL(message.text || "", prefs);
+      message.translationText = await translateWithMyMemory(message.text || "", prefs);
       message.translationFailed = false; message.translationError = "";
     } catch (error) {
       message.translationText = ""; message.translationFailed = true;
-      message.translationError = error?.message || "DeepL 翻译失败";
+      message.translationError = error?.message || "MyMemory 翻译失败";
     }
     saveState();
     if (activeTab === "message" && inChat && activeContactId === message.contactId) renderMessages();
@@ -1040,53 +1048,38 @@
     const statusNote = document.createElement("div"); statusNote.className = "pref-status-note";
     statusNote.innerHTML = "<strong>Delivered / Read 状态规则</strong><span>你发送消息后，对方此前的消息变为 Read；你的新消息先显示 Delivered。角色实际回复后，你的消息变为 Read，而角色的新消息显示 Delivered。若触发已读不回，角色虽然不回复，但你的消息仍会变为 Read。</span>";
     delaySection.append(statusNote);
-    const ttsSection = preferenceSection(host, "03 · 语音与 TTS 设置", "RETRO VOICE MESSAGE · DEEPL → MINIMAX");
-    const deeplSection = preferenceSection(ttsSection, "DeepL 翻译 API 配置", "SERVER PROXY · KEY STORED ON SERVER");
-    const deeplProxy = addModalField(deeplSection, "翻译代理 URL（必填）", { value: prefs.deeplProxyUrl || "", placeholder: "https://your-service.example/api/translate" });
-    deeplProxy.autocomplete = "url"; deeplProxy.addEventListener("input", () => prefs.deeplProxyUrl = deeplProxy.value.trim());
-    const deeplTypeRow = document.createElement("div"); deeplTypeRow.className = "deepl-type-row";
-    const deeplTypeLabel = document.createElement("strong"); deeplTypeLabel.textContent = "API 类型"; deeplTypeRow.append(deeplTypeLabel);
-    const deeplTypeOptions = document.createElement("div"); deeplTypeOptions.className = "deepl-type-options";
-    [{value:"free",label:"Free 免费版 API"},{value:"pro",label:"Pro 付费版 API"}].forEach(item => {
-      const label = document.createElement("label"); label.className = "deepl-radio-option";
-      const radio = document.createElement("input"); radio.type = "radio"; radio.name = `deepl-api-type-${contactId}`; radio.value = item.value; radio.checked = (prefs.deeplApiType || "free") === item.value;
-      radio.addEventListener("change", () => { if (radio.checked) prefs.deeplApiType = item.value; });
-      const text = document.createElement("span"); text.textContent = item.label; label.append(radio, text); deeplTypeOptions.append(label);
+    const ttsSection = preferenceSection(host, "03 · 语音与 TTS 设置", "RETRO VOICE MESSAGE · MYMEMORY → MINIMAX");
+    const translationSection = preferenceSection(ttsSection, "MyMemory 自动翻译", "PUBLIC TRANSLATION API · NO KEY REQUIRED");
+    preferenceToggle(translationSection, "自动翻译字卡", "开启后，角色触发语音消息时，会先用 MyMemory 翻译，再将译文交给 MiniMax 合成语音。", prefs.autoTranslateCards, checked => { prefs.autoTranslateCards = checked; });
+    preferenceToggle(translationSection, "语音消息同时显示译文", "勾选后，在语音条下方显示 MyMemory 返回的译文。", prefs.showTranslatedText !== false, checked => { prefs.showTranslatedText = checked; });
+    const myMemoryNote = document.createElement("div"); myMemoryNote.className = "pref-status-note"; myMemoryNote.innerHTML = "<strong>无需 API Key 或代理</strong><span>直接通过公开的 MyMemory 翻译接口请求，适用于静态 GitHub Pages。需要联网，服务可能有免费额度、频率限制或临时不可用的情况。支持目标语言：英语、日语、韩语、德语。</span>"; translationSection.append(myMemoryNote);
+    const testTranslation = document.createElement("button"); testTranslation.type = "button"; testTranslation.className = "chrome-btn tts-test-btn"; testTranslation.textContent = "⌕ 测试 MyMemory 翻译";
+    testTranslation.addEventListener("click", async () => {
+      prefs.ttsLanguage = lang.value;
+      const targetLang = translationTargetLanguage(prefs.ttsLanguage);
+      if (!targetLang) { await showDiagnosticError("MyMemory 测试失败", new Error("请先在「语音语言」中选择英语、日语、韩语或德语；选择「原文」无法确定翻译目标。"), { 当前语言: prefs.ttsLanguage, 支持目标语言: "英语 / 日语 / 韩语 / 德语" }); return; }
+      testTranslation.disabled = true; testTranslation.textContent = "正在测试连接…";
+      const sample = "你好，很高兴认识你。";
+      try {
+        const translated = await translateWithMyMemory(sample, prefs);
+        await showModal("MyMemory 翻译成功 ✓", `目标语言：${prefs.ttsLanguage}\n测试原文：${sample}\n翻译结果：${translated}\n\n翻译服务已成功返回译文。若语音仍无法播放，请再单独测试 MiniMax。`, "✓", { okText: "完成" });
+      } catch (error) {
+        await showDiagnosticError("MyMemory 测试失败 · 错误详情", error, { 失败阶段: "网页 → MyMemory 翻译 API", 请求地址: "https://api.mymemory.translated.net/get", 目标语言: prefs.ttsLanguage, 测试原文: sample, 排查建议: "请检查网络连接；公开服务可能存在额度或频率限制，请稍后再试。", 浏览器: navigator.userAgent });
+      } finally { testTranslation.disabled = false; testTranslation.textContent = "⌕ 测试 MyMemory 翻译"; }
     });
-    deeplTypeRow.append(deeplTypeOptions); deeplSection.append(deeplTypeRow);
-    preferenceToggle(deeplSection, "自动翻译字卡", "开启后，角色触发语音消息时，会先用 DeepL 翻译，再将译文交给 MiniMax 合成语音。", prefs.autoTranslateCards, checked => { prefs.autoTranslateCards = checked; });
-    preferenceToggle(deeplSection, "语音消息同时显示译文", "勾选后，在语音条下方显示 DeepL 返回的外语文本。", prefs.showTranslatedText !== false, checked => { prefs.showTranslatedText = checked; });
-    const deeplNote = document.createElement("div"); deeplNote.className = "pref-status-note"; deeplNote.innerHTML = "<strong>需要后端代理</strong><span>DeepL 官方 API 不支持从浏览器直接调用。请先部署项目附带的 server.js，将 DeepL Key 保存为服务端环境变量，再把代理地址填在上方。语言映射：英语 → EN-US · 日语 → JA · 韩语 → KO · 德语 → DE。</span>"; deeplSection.append(deeplNote);
+    translationSection.append(testTranslation);
     preferenceToggle(ttsSection, "启用角色语音消息", "开启后，角色每次回复有 40% 概率显示为复古语音条。", prefs.ttsEnabled, checked => { prefs.ttsEnabled = checked; });
     const apiKey = addModalField(ttsSection, "MiniMax API Key（密码隐藏）", { type: "password", value: prefs.minimaxApiKey, placeholder: "输入 API Key" }); apiKey.autocomplete = "off"; apiKey.addEventListener("input", () => prefs.minimaxApiKey = apiKey.value);
     const groupId = addModalField(ttsSection, "Group ID", { value: prefs.minimaxGroupId, placeholder: "MiniMax Group ID" }); groupId.addEventListener("input", () => prefs.minimaxGroupId = groupId.value);
     const model = addModalField(ttsSection, "Model", { value: prefs.ttsModel || "speech-2.8-hd" }); model.addEventListener("input", () => prefs.ttsModel = model.value);
     const voiceId = addModalField(ttsSection, "Voice ID", { value: prefs.voiceId, placeholder: "音色代码" }); voiceId.addEventListener("input", () => prefs.voiceId = voiceId.value);
     const lang = addModalField(ttsSection, "语音语言", { tag: "select", value: prefs.ttsLanguage, choices: [{value:"原文",label:"原文"},{value:"日语",label:"日语"},{value:"英语",label:"英语"},{value:"韩语",label:"韩语"},{value:"德语",label:"德语"}] }); lang.value = prefs.ttsLanguage; lang.addEventListener("change", () => prefs.ttsLanguage = lang.value);
-    const testDeepL = document.createElement("button"); testDeepL.type = "button"; testDeepL.className = "chrome-btn tts-test-btn deepl-test-btn"; testDeepL.textContent = "⌕ 测试 DeepL 翻译连接";
-    testDeepL.addEventListener("click", async () => {
-      prefs.deeplProxyUrl = deeplProxy.value.trim();
-      prefs.deeplApiType = deeplTypeOptions.querySelector('input[type="radio"]:checked')?.value || prefs.deeplApiType || "free";
-      prefs.ttsLanguage = lang.value;
-      const targetLang = deeplTargetLanguage(prefs.ttsLanguage);
-      const endpoint = prefs.deeplProxyUrl || "（尚未填写翻译代理 URL）";
-      if (!prefs.deeplProxyUrl) { await showDiagnosticError("DeepL 测试失败", new Error("未填写翻译代理 URL。请先部署后端代理，再填写它提供的 /api/translate 地址。"), { API类型: prefs.deeplApiType === "pro" ? "Pro" : "Free", 目标语言: targetLang || "未选择支持的外语", 请求地址: endpoint, 安全提示: "DeepL API Key 应保存在服务端环境变量中，不要填写或提交到前端代码。" }); return; }
-      if (!targetLang) { await showDiagnosticError("DeepL 测试失败", new Error("请先在「语音语言」中选择英语、日语、韩语或德语；选择「原文」无法确定翻译目标。"), { 当前语言: prefs.ttsLanguage, 支持目标语言: "英语 EN-US / 日语 JA / 韩语 KO / 德语 DE" }); return; }
-      testDeepL.disabled = true; testDeepL.textContent = "正在测试连接…";
-      const sample = "你好，很高兴认识你。";
-      try {
-        const translated = await translateWithDeepL(sample, prefs);
-        await showModal("DeepL 连接成功 ✓", `API 类型：${prefs.deeplApiType === "pro" ? "Pro 付费版" : "Free 免费版"}\n目标语言：${targetLang}\n测试原文：${sample}\n翻译结果：${translated}\n\nDeepL 已成功返回译文。若语音仍无法播放，请再单独测试 MiniMax。`, "✓", { okText: "完成" });
-      } catch (error) {
-        await showDiagnosticError("DeepL 测试失败 · 错误详情", error, { 失败阶段: "网页 → 翻译代理 → DeepL API", API类型: prefs.deeplApiType === "pro" ? "Pro 付费版" : "Free 免费版", 请求地址: endpoint, 目标语言: targetLang, 测试原文: sample, Key状态: "由代理服务器环境变量提供（前端不接触 Key）", 排查建议: "HTTP 401 通常表示服务端 Key 无效；403 可能是账户/权限问题；456 通常表示额度或使用限制；Failed to fetch 通常是代理 URL、服务状态或 CORS 配置问题。", 浏览器: navigator.userAgent });
-      } finally { testDeepL.disabled = false; testDeepL.textContent = "⌕ 测试 DeepL 翻译连接"; }
-    });
-    deeplSection.append(testDeepL);
+
     preferenceRange(ttsSection, "语速 · Speed", "慢 ↔ 快；可在试听按钮中试听当前配置。", 0.5, 2, 0.05, Number(prefs.ttsSpeed) || 1, value => { prefs.ttsSpeed = value; }, value => `${Number(value).toFixed(2)}x`);
     const gender = addModalField(ttsSection, "角色性别", { tag: "select", value: prefs.ttsGender, choices: [{value:"男",label:"男"},{value:"女",label:"女"}] }); gender.value = prefs.ttsGender; gender.addEventListener("change", () => prefs.ttsGender = gender.value);
     const emotion = addModalField(ttsSection, "说话风格预设", { tag: "select", value: prefs.ttsEmotion, choices: ["傲娇冷漠","温柔体贴","活泼开朗","高冷霸道","自定义"].map(v => ({value:v,label:v})) }); emotion.value = prefs.ttsEmotion; emotion.addEventListener("change", () => prefs.ttsEmotion = emotion.value);
     const customEmotion = addModalField(ttsSection, "自定义情绪描述（最多 50 字）", { value: prefs.ttsCustomEmotion, placeholder: "例如：压低声音，克制但带一点吃醋", maxLength: 50 }); customEmotion.addEventListener("input", () => prefs.ttsCustomEmotion = customEmotion.value.slice(0,50));
-    const testVoice = document.createElement("button"); testVoice.type = "button"; testVoice.className = "chrome-btn tts-test-btn"; testVoice.textContent = "▶ 试听当前设置"; testVoice.addEventListener("click", async () => { prefs.minimaxApiKey = apiKey.value.trim(); prefs.minimaxGroupId = groupId.value.trim(); prefs.voiceId = voiceId.value.trim(); prefs.ttsModel = model.value.trim() || "speech-2.8-hd"; prefs.ttsLanguage = lang.value; prefs.ttsSpeed = Number(ttsSection.querySelector(".retro-range")?.value || prefs.ttsSpeed); if (!prefs.minimaxApiKey || !prefs.voiceId) { await showDiagnosticError("试听配置不完整", new Error(!prefs.minimaxApiKey ? "API Key 为空，请填写 MiniMax API Key。" : "Voice ID 为空，请填写有效音色 ID。"), { 当前模型: prefs.ttsModel, GroupID: prefs.minimaxGroupId ? "已填写" : "未填写", VoiceID: prefs.voiceId ? "已填写" : "未填写", 提示: "不要把 API Key 截图或发给他人。" }); return; } testVoice.disabled = true; testVoice.textContent = "正在生成…"; let stage = "请求 MiniMax 生成音频"; try { let testText = "你好，这是复古字卡语音试听。"; if (shouldTranslateVoice(prefs)) { try { testText = await translateWithDeepL(testText, prefs); } catch (translationError) { stage = "DeepL 翻译（已回退原文）"; } } const url = await generateMiniMaxAudio(testText, prefs); stage = "浏览器播放音频"; const audio = new Audio(url); await new Promise((resolve, reject) => { audio.addEventListener("canplaythrough", resolve, { once: true }); audio.addEventListener("error", () => reject(new Error(`音频已返回但浏览器无法解码或播放（audio.error code: ${audio.error?.code || "unknown"}）。请检查音频格式和返回数据。`)), { once: true }); audio.load(); setTimeout(() => { if (audio.readyState >= 3) resolve(); }, 1500); }); await audio.play(); } catch (e) { await showDiagnosticError("试听失败 · 诊断信息", e, { 失败阶段: stage, 请求地址: "https://api.minimaxi.com/v1/t2a_v2", 模型: prefs.ttsModel, 语音ID: prefs.voiceId, GroupID: prefs.minimaxGroupId ? "已填写（T2A v2 请求通常不需要此字段）" : "未填写", 浏览器: navigator.userAgent, 附加诊断: e?.diagnostic ? JSON.stringify(e.diagnostic, null, 2) : "无服务端结构化错误信息" }); } finally { testVoice.disabled = false; testVoice.textContent = "▶ 试听当前设置"; } }); ttsSection.append(testVoice);
+    const testVoice = document.createElement("button"); testVoice.type = "button"; testVoice.className = "chrome-btn tts-test-btn"; testVoice.textContent = "▶ 试听当前设置"; testVoice.addEventListener("click", async () => { prefs.minimaxApiKey = apiKey.value.trim(); prefs.minimaxGroupId = groupId.value.trim(); prefs.voiceId = voiceId.value.trim(); prefs.ttsModel = model.value.trim() || "speech-2.8-hd"; prefs.ttsLanguage = lang.value; prefs.ttsSpeed = Number(ttsSection.querySelector(".retro-range")?.value || prefs.ttsSpeed); if (!prefs.minimaxApiKey || !prefs.voiceId) { await showDiagnosticError("试听配置不完整", new Error(!prefs.minimaxApiKey ? "API Key 为空，请填写 MiniMax API Key。" : "Voice ID 为空，请填写有效音色 ID。"), { 当前模型: prefs.ttsModel, GroupID: prefs.minimaxGroupId ? "已填写" : "未填写", VoiceID: prefs.voiceId ? "已填写" : "未填写", 提示: "不要把 API Key 截图或发给他人。" }); return; } testVoice.disabled = true; testVoice.textContent = "正在生成…"; let stage = "请求 MiniMax 生成音频"; try { let testText = "你好，这是复古字卡语音试听。"; if (shouldTranslateVoice(prefs)) { try { testText = await translateWithMyMemory(testText, prefs); } catch (translationError) { stage = "MyMemory 翻译（已回退原文）"; } } const url = await generateMiniMaxAudio(testText, prefs); stage = "浏览器播放音频"; const audio = new Audio(url); await new Promise((resolve, reject) => { audio.addEventListener("canplaythrough", resolve, { once: true }); audio.addEventListener("error", () => reject(new Error(`音频已返回但浏览器无法解码或播放（audio.error code: ${audio.error?.code || "unknown"}）。请检查音频格式和返回数据。`)), { once: true }); audio.load(); setTimeout(() => { if (audio.readyState >= 3) resolve(); }, 1500); }); await audio.play(); } catch (e) { await showDiagnosticError("试听失败 · 诊断信息", e, { 失败阶段: stage, 请求地址: "https://api.minimaxi.com/v1/t2a_v2", 模型: prefs.ttsModel, 语音ID: prefs.voiceId, GroupID: prefs.minimaxGroupId ? "已填写（T2A v2 请求通常不需要此字段）" : "未填写", 浏览器: navigator.userAgent, 附加诊断: e?.diagnostic ? JSON.stringify(e.diagnostic, null, 2) : "无服务端结构化错误信息" }); } finally { testVoice.disabled = false; testVoice.textContent = "▶ 试听当前设置"; } }); ttsSection.append(testVoice);
     const securityNote = document.createElement("div"); securityNote.className = "pref-status-note"; securityNote.innerHTML = "<strong>接口安全提醒</strong><span>此纯前端 Demo 会将 API Key 保存在本机浏览器设置中，且浏览器请求可能暴露密钥。正式公开部署请改用服务端代理，不要把真实密钥提交到 GitHub。</span>"; ttsSection.append(securityNote);
 
     const result = await resultPromise;

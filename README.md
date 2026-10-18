@@ -73,67 +73,14 @@ retro-otome/
 - 设置保存在当前浏览器的 localStorage 中，不会跨设备同步。
 
 
-## DeepL → MiniMax 双 API 联动（需要后端代理）
+## 免费翻译：MyMemory → MiniMax
 
-DeepL 官方明确不允许浏览器端 JavaScript 直接调用 DeepL API；浏览器请求会被 CORS 策略拦截。请不要在 `app.js` 中放置真实 API Key。项目现在改为通过 `server.js` 后端代理请求 DeepL，Key 只从服务端环境变量读取。
+网页默认使用 MyMemory 的公开翻译接口，无需填写翻译 API Key，也不需要部署后端代理，适合 GitHub Pages 静态网站。
 
-### 部署后端代理
+- 在角色设置的「语音与 TTS 设置」中，选择语音语言（英语、日语、韩语或德语）。
+- 开启「自动翻译字卡」后，语音文本会先通过 MyMemory 翻译，再交给 MiniMax 合成语音。
+- 可以点击「测试 MyMemory 翻译」检查接口是否可用。
+- MyMemory 是公开在线服务，需要网络连接，可能存在免费额度、频率限制或临时不可用；翻译质量也可能与 DeepL 不同。
+- MiniMax 语音仍使用你自己填写的 MiniMax API Key。不要将密钥写入公开代码仓库。
 
-项目使用 Node.js 18 或更高版本，代理没有额外 npm 依赖。可以将整个项目上传到支持 Node.js 的服务托管平台，或在本机测试。
-
-需要在托管平台的环境变量（Environment Variables）中设置：
-
-- `DEEPL_API_KEY`：你的 DeepL API Key（仅填在服务端，不要提交到 GitHub）。
-- `DEEPL_API_TYPE`：`free` 或 `pro`，作为默认类型。
-- `ALLOWED_ORIGIN`：允许访问代理的网页来源。填写完整 Origin，不要加结尾斜杠；例如 `https://你的用户名.github.io`。本机测试可设置为 `http://localhost:8000`。如果有多个来源，用英文逗号分隔。
-- `PORT`：通常由托管平台自动设置，不需要手动填写。
-
-启动命令：
-
-```bash
-npm start
-```
-
-部署成功后，先打开 `https://你的代理域名/health`。应返回 JSON，其中 `ok` 为 `true`，`keyConfigured` 为 `true` 表示服务端已读取到 Key。翻译接口地址是 `https://你的代理域名/api/translate`。
-
-### 连接前端
-
-1. 打开网页，进入聊天对象的 **Edit → 03 · 语音与 TTS 设置**。
-2. 在「翻译代理 URL」中填入完整地址，例如 `https://你的代理域名/api/translate`。
-3. 选择 DeepL Free 或 Pro 类型。该选择会发送给代理，代理据此选择 DeepL 对应接口；所填 Key 必须属于相应 API 类型。
-4. 将「语音语言」设置为英语、日语、韩语或德语，再点击「测试 DeepL 翻译连接」。
-5. 测试成功后，可以开启「自动翻译字卡」和「语音消息同时显示译文」。自动翻译成功时，译文会交给 MiniMax 合成语音；翻译失败时会回退到原文字卡。
-
-### 本机测试
-
-终端 1：在项目目录启动代理，并设置环境变量。Windows PowerShell 示例：
-
-```powershell
-$env:DEEPL_API_KEY="你的真实密钥"
-$env:DEEPL_API_TYPE="free"
-$env:ALLOWED_ORIGIN="http://localhost:8000"
-npm start
-```
-
-终端 2：在同一项目目录启动静态网页服务：
-
-```bash
-python -m http.server 8000
-```
-
-然后访问 `http://localhost:8000`，不要直接双击 `index.html`（地址会显示为 `file:///...`）。在设置中填写 `http://localhost:8787/api/translate`。本机测试时代理服务和静态网页服务都必须保持运行。
-
-### 错误诊断
-
-- `Failed to fetch`：先检查代理 URL、代理服务是否运行，以及 `ALLOWED_ORIGIN` 是否与网页地址完全一致。
-- `HTTP 401`：服务端环境变量中的 DeepL Key 无效或不匹配。
-- `HTTP 403`：账户权限、API 类型或请求来源配置可能不正确。
-- `HTTP 456`：可能是 DeepL 配额或使用限制。
-- `HTTP 429`：代理的简单请求频率限制已触发，稍后重试。
-- `keyConfigured: false`：托管平台没有正确设置 `DEEPL_API_KEY`。
-
-代理有基础来源限制和每个 IP 的频率限制，但公开部署前仍应仅允许自己的网页来源，并监控请求用量。不要把 `.env`、真实密钥或包含密钥的截图提交到公开仓库。
-
-### DeepL 翻译连接测试
-
-「测试 DeepL 翻译连接」会单独翻译“你好，很高兴认识你。”，不会调用 MiniMax。失败时会显示代理请求地址、目标语言、HTTP 状态和后端返回的错误详情。前端不再接收或保存 DeepL Key。
+该项目作为静态网站使用时，不需要启动 `server.js`。如果不再使用旧的 DeepL 代理，可以从仓库中删除 `server.js` 和仅用于代理的 `package.json`。
