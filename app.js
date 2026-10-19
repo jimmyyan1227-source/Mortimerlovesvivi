@@ -170,6 +170,7 @@
   function renderLayout() {
     if (!(activeTab === "message" && inChat)) { $("#extension-panel").hidden = true; $("#sticker-tray").hidden = true; }
     const messageListVisible = activeTab === "message" && !inChat;
+    const musicBoardOpen = activeTab === "notes" && !$("#notes-music-board").hidden;
     $("#page-message").hidden = !messageListVisible;
     $("#page-chat").hidden = !(activeTab === "message" && inChat);
     $("#page-notes").hidden = activeTab !== "notes";
@@ -180,12 +181,13 @@
     const readingNote = state.notes.find(note => note.id === readingNoteId);
     $(".phone").classList.toggle("feature-reader-active", activeTab === "notes" && !$("#note-reader").hidden && ["letter", "diary"].includes(readingNote?.type));
     $("#top-action").hidden = false;
-    $(".tab-bar").hidden = activeTab === "message" && inChat;
+    $(".tab-bar").hidden = (activeTab === "message" && inChat) || musicBoardOpen;
+    $(".phone").classList.toggle("music-board-active", musicBoardOpen);
     $("#add-contact-btn").hidden = !(activeTab === "message" && !inChat);
     $(".phone").classList.toggle("chat-immersive", activeTab === "message" && inChat);
     const titles = { message: inChat ? currentContact().name : "Message", notes: !$("#note-reader").hidden ? (currentNoteKind === "diary" ? "Diary" : "Letter") : !$("#note-editor").hidden ? "Note Editor" : !$("#note-collection").hidden ? ({ letter: "Letters", diary: "Diary", all: "All Fragments" }[currentNoteKind] || "Notes") : "Notes", saved: "Saved", me: "Me" };
-    $("#top-title").textContent = titles[activeTab];
-    $("#top-action").textContent = activeTab === "message" && inChat ? "Edit" : activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : (!$("#note-reader").hidden ? "Edit" : "＋ New")) : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
+    $("#top-title").textContent = musicBoardOpen ? "Music" : titles[activeTab];
+    $("#top-action").textContent = musicBoardOpen ? "‹ Back" : activeTab === "message" && inChat ? "Edit" : activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : (!$("#note-reader").hidden ? "Edit" : "＋ New")) : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
   }
   function switchTab(tab) {
     activeTab = tab; inChat = false; endSelectionMode();
@@ -1980,7 +1982,6 @@
   $$(".mood-chip").forEach(button => button.addEventListener("click", () => { currentFilter = button.dataset.filter; $$(".mood-chip").forEach(chip => chip.classList.toggle("active", chip === button)); renderConversations(); }));
   $("#profile-done").addEventListener("click", () => showModal("Profile", "个人主页已就绪。新的聊天字卡会被收进 Saved。", "♡"));
   $("#open-music-board").addEventListener("click", () => { $("#notes-home").hidden = true; $("#notes-music-board").hidden = false; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = true; renderLayout(); });
-  $("#music-board-back").addEventListener("click", () => { $("#notes-music-board").hidden = true; $("#notes-home").hidden = false; renderLayout(); });
   $$(".notes-row[data-note-kind]").forEach(button => button.addEventListener("click", () => {
     const kind = button.dataset.noteKind;
     if (["letter", "diary", "all"].includes(kind)) { openNoteCollection(kind); return; }
@@ -2066,7 +2067,7 @@
   $("#edit-signature").addEventListener("click", () => { const signature = window.prompt("输入个人签名：", state.signature); if (signature !== null) { state.signature = signature.trim(); $("#profile-signature").textContent = state.signature; saveState(); renderMe(); } });
   $("#export-data").addEventListener("click", downloadJson);
   $("#reset-data").addEventListener("click", async () => { if (await showModal("Reset local data?", "这会清除本浏览器中的 Notes、字卡、聊天记录和自定义纪念日。", "!", { confirm: true, okText: "Reset" })) { state = freshState(); saveState(); selectedDate = todayKey(); calendarYear = new Date().getFullYear(); calendarMonth = new Date().getMonth(); $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature; renderConversations(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderNotes(); switchTab("message"); showModal("Reset complete", "本地数据已恢复为初始 Demo 内容。", "✓"); } });
-  $("#top-action").addEventListener("click", () => { if (activeTab === "message" && inChat) openChatPreferences(); else if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes" && !$("#note-reader").hidden) { if (readingNoteId) openNoteEditor(currentNoteKind, readingNoteId); } else if (activeTab === "notes") { if (!$("#note-collection").hidden) $("#create-collection-note").click(); else $("#new-note").click(); } else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。", "✎"); });
+  $("#top-action").addEventListener("click", () => { if (activeTab === "notes" && !$("#notes-music-board").hidden) { $("#notes-music-board").hidden = true; $("#notes-home").hidden = false; renderLayout(); return; } if (activeTab === "message" && inChat) openChatPreferences(); else if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes" && !$("#note-reader").hidden) { if (readingNoteId) openNoteEditor(currentNoteKind, readingNoteId); } else if (activeTab === "notes") { if (!$("#note-collection").hidden) $("#create-collection-note").click(); else $("#new-note").click(); } else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。", "✎"); });
 
   $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature;
   if (state.profileAvatar) { $("#profile-avatar").src = state.profileAvatar; const meAvatar = $("#me-profile-avatar"); if (meAvatar) meAvatar.src = state.profileAvatar; }
