@@ -12,6 +12,98 @@
 <main class="stage">
   <section class="phone" aria-label="Retro Otome 应用">
     <header class="topbar"><button class="chrome-btn" id="back-btn" hidden>‹ Back</button><button class="chrome-btn" id="top-action">Edit</button><div class="top-title" id="top-title">Message</div><button class="add-contact-btn header-add-contact" id="add-contact-btn" type="button" aria-label="添加联系人" title="添加联系人"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3.2"/><path d="M2.8 19c.3-3.5 2.5-5.4 6.2-5.4 2.1 0 3.7.6 4.8 1.8M18 8v8M14 12h8"/></svg></button></header>
+    <section id="call-screen" class="ios6-call-overlay hidden" role="dialog" aria-modal="true" aria-label="模拟语音通话界面" aria-hidden="true">
+      <div class="ios6-call-bg-pattern" aria-hidden="true"></div>
+      <div class="ios6-call-topbar">
+        <button type="button" class="ios6-call-back-btn" id="call-back-btn" title="最小化通话" aria-label="最小化通话">‹</button>
+        <span class="ios6-call-sim-tag">SIMULATED CALL</span>
+        <div class="ios6-call-topbar-spacer" aria-hidden="true"></div>
+      </div>
+      <div class="ios6-call-content">
+        <div class="ios6-call-header">
+          <div class="ios6-avatar-frame">
+            <img id="call-avatar" src="" alt="联系人头像" class="ios6-call-avatar" />
+            <div class="ios6-avatar-gloss" aria-hidden="true"></div>
+          </div>
+          <h2 id="call-contact-name" class="ios6-call-name">联系人名字</h2>
+          <div class="ios6-call-status-pill">
+            <span id="call-status" class="ios6-status-connecting"><span class="ios6-pulse-ring" aria-hidden="true"></span>正在呼叫...</span>
+          </div>
+        </div>
+        <div class="ios6-grid-container" aria-label="通话功能菜单">
+          <button type="button" class="ios6-grid-cell" id="tool-mute" aria-pressed="false"><span class="ios6-icon-wrap" aria-hidden="true"><svg viewBox="0 0 24 24" class="ios6-grid-svg"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4m-4 0h8" stroke="currentColor" stroke-width="2" fill="none"/><line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" stroke-width="2.2"/></svg></span><span class="ios6-grid-label">静音</span></button>
+          <button type="button" class="ios6-grid-cell" id="tool-keypad" aria-pressed="false"><span class="ios6-icon-wrap" aria-hidden="true"><svg viewBox="0 0 24 24" class="ios6-grid-svg"><rect x="3" y="3" width="4" height="4" rx="1" fill="currentColor"/><rect x="10" y="3" width="4" height="4" rx="1" fill="currentColor"/><rect x="17" y="3" width="4" height="4" rx="1" fill="currentColor"/><rect x="3" y="10" width="4" height="4" rx="1" fill="currentColor"/><rect x="10" y="10" width="4" height="4" rx="1" fill="currentColor"/><rect x="17" y="10" width="4" height="4" rx="1" fill="currentColor"/><rect x="3" y="17" width="4" height="4" rx="1" fill="currentColor"/><rect x="10" y="17" width="4" height="4" rx="1" fill="currentColor"/><rect x="17" y="17" width="4" height="4" rx="1" fill="currentColor"/></svg></span><span class="ios6-grid-label">拨号键盘</span></button>
+          <button type="button" class="ios6-grid-cell" id="tool-speaker" aria-pressed="false"><span class="ios6-icon-wrap" aria-hidden="true"><svg viewBox="0 0 24 24" class="ios6-grid-svg"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg></span><span class="ios6-grid-label">免提</span></button>
+          <button type="button" class="ios6-grid-cell" id="tool-add"><span class="ios6-icon-wrap" aria-hidden="true"><svg viewBox="0 0 24 24" class="ios6-grid-svg"><path d="M12 4v16m-8-8h16" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></span><span class="ios6-grid-label">添加通话</span></button>
+          <button type="button" class="ios6-grid-cell" id="tool-facetime"><span class="ios6-icon-wrap" aria-hidden="true"><svg viewBox="0 0 24 24" class="ios6-grid-svg"><rect x="2" y="5" width="13" height="14" rx="3" fill="currentColor"/><path d="M15 10l6-4v12l-6-4v-4z" fill="currentColor"/><circle cx="8.5" cy="12" r="2.2" fill="#d9e6f3"/></svg></span><span class="ios6-grid-label">FaceTime</span></button>
+          <button type="button" class="ios6-grid-cell" id="tool-contacts"><span class="ios6-icon-wrap" aria-hidden="true"><svg viewBox="0 0 24 24" class="ios6-grid-svg"><circle cx="12" cy="7" r="4.2" fill="currentColor"/><path d="M4 20c.5-4 4-6.5 8-6.5s7.5 2.5 8 6.5" stroke="currentColor" stroke-width="2.5" fill="currentColor"/></svg></span><span class="ios6-grid-label">通讯录</span></button>
+        </div>
+      <section id="ios6-dialpad-panel" class="ios6-dialpad-panel" role="group" aria-label="拨号键盘" aria-hidden="true">
+        <div class="ios6-dialpad-topline">
+          <span class="ios6-dialpad-heading">拨号键盘</span>
+        </div>
+        <div class="ios6-dialpad-display-row">
+          <output id="dialpad-display" class="ios6-dialpad-display" aria-live="polite" aria-label="已输入号码"></output>
+          <button type="button" id="dialpad-delete" class="ios6-dialpad-delete" aria-label="删除最后一位" title="删除最后一位">⌫</button>
+        </div>
+        <div class="ios6-dialpad-grid" aria-label="数字和符号">
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="1" aria-label="1"><span class="ios6-dialpad-number">1</span><small></small></button>
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="2" aria-label="2 ABC"><span class="ios6-dialpad-number">2</span><small>ABC</small></button>
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="3" aria-label="3 DEF"><span class="ios6-dialpad-number">3</span><small>DEF</small></button>
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="4" aria-label="4 GHI"><span class="ios6-dialpad-number">4</span><small>GHI</small></button>
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="5" aria-label="5 JKL"><span class="ios6-dialpad-number">5</span><small>JKL</small></button>
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="6" aria-label="6 MNO"><span class="ios6-dialpad-number">6</span><small>MNO</small></button>
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="7" aria-label="7 PQRS"><span class="ios6-dialpad-number">7</span><small>PQRS</small></button>
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="8" aria-label="8 TUV"><span class="ios6-dialpad-number">8</span><small>TUV</small></button>
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="9" aria-label="9 WXYZ"><span class="ios6-dialpad-number">9</span><small>WXYZ</small></button>
+          <button type="button" class="ios6-dialpad-key ios6-dialpad-symbol" data-dial-digit="*" aria-label="星号"><span class="ios6-dialpad-number">*</span><small></small></button>
+          <button type="button" class="ios6-dialpad-key" data-dial-digit="0" aria-label="0"><span class="ios6-dialpad-number">0</span><small>＋</small></button>
+          <button type="button" class="ios6-dialpad-key ios6-dialpad-symbol" data-dial-digit="#" aria-label="井号"><span class="ios6-dialpad-number">#</span><small></small></button>
+        </div>
+        <button type="button" id="dialpad-close" class="ios6-dialpad-hide">隐藏键盘</button>
+      </section>
+        <div class="ios6-call-footer">
+          <button type="button" class="ios6-hangup-btn" id="call-end-btn" aria-label="结束通话"><span class="ios6-hangup-gloss" aria-hidden="true"></span><span class="ios6-hangup-icon" aria-hidden="true"><svg viewBox="0 0 24 24" class="ios6-phone-svg"><path d="M3.5 15.2c-.3-.3-.4-.7-.2-1.1 1.2-2.5 3.3-4.5 5.8-5.7.4-.2.9-.1 1.2.2l2.3 2.3c.3.3.8.3 1.1 0l2.3-2.3c.3-.3.8-.4 1.2-.2 2.5 1.2 4.6 3.2 5.8 5.7.2.4.1.8-.2 1.1l-2.1 2.1c-.4.4-1 .4-1.4.1-2.2-1.5-4.7-2.3-7.4-2.3s-5.2.8-7.4 2.3c-.4.3-1 .3-1.4-.1L3.5 15.2z" fill="currentColor" transform="rotate(135 12 12)"/></svg></span><span class="ios6-hangup-text">结 束</span></button>
+          <small class="ios6-footnote">RETRO CALL · 拟物通话界面</small>
+        </div>
+      </div>
+
+    </section>
+    <section id="facetime-screen" class="ios6-facetime-overlay hidden" role="dialog" aria-modal="true" aria-label="FaceTime 视频通话" aria-hidden="true">
+      <div class="ios6-facetime-bg" aria-hidden="true"></div>
+      <header class="ios6-facetime-topbar">
+        <div class="ios6-facetime-contact">
+          <strong id="facetime-contact-name">联系人</strong>
+          <span><i class="ios6-facetime-live-dot" aria-hidden="true"></i><span id="facetime-status">正在连接</span><b id="facetime-timer">00:00</b></span>
+        </div>
+        <button type="button" id="facetime-upload-top" class="ios6-facetime-upload" aria-label="更换角色照片">更换照片</button>
+      </header>
+      <main class="ios6-facetime-main">
+        <div class="ios6-facetime-frame" id="facetime-frame">
+          <div class="ios6-facetime-frame-inner">
+            <img id="facetime-portrait" class="ios6-facetime-portrait" src="" alt="当前角色照片" />
+            <div class="ios6-facetime-empty" id="facetime-empty" hidden>选择一张角色照片<br><small>支持本地 JPG、PNG、WebP</small></div>
+            <label class="ios6-facetime-change" for="facetime-photo-input">上传 / 更换</label>
+            <input id="facetime-photo-input" type="file" accept="image/*" hidden />
+          </div>
+          <span class="ios6-facetime-frame-gloss" aria-hidden="true"></span>
+        </div>
+      </main>
+      <footer class="ios6-facetime-controls">
+        <div class="ios6-facetime-control-row">
+          <button type="button" class="ios6-facetime-control" id="facetime-mute" aria-pressed="false"><span class="ios6-facetime-control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/><path class="mute-slash" d="M4 4l16 16"/></svg></span><span>静音</span></button>
+          <button type="button" class="ios6-facetime-control" id="facetime-flip" aria-pressed="false"><span class="ios6-facetime-control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM16 10l6-3v10l-6-3"/><path d="M7 4l-3 3 3 3M17 20l3-3-3-3"/></svg></span><span>镜像</span></button>
+          <button type="button" class="ios6-facetime-control" id="facetime-change-photo"><span class="ios6-facetime-control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg></span><span>展示图片</span></button>
+        </div>
+        <button type="button" id="facetime-end-btn" class="ios6-facetime-end"><span class="ios6-facetime-end-gloss" aria-hidden="true"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 15.2c-.3-.3-.4-.7-.2-1.1 1.2-2.5 3.3-4.5 5.8-5.7.4-.2.9-.1 1.2.2l2.3 2.3c.3.3.8.3 1.1 0l2.3-2.3c.4-.3.8-.4 1.2-.2 2.5 1.2 4.6 3.2 5.8 5.7.2.4.1.8-.2 1.1l-2.1 2.1c-.4.4-1 .4-1.4.1-2.2-1.5-4.7-2.3-7.4-2.3s-5.2.8-7.4 2.3c-.4.3-1 .3-1.4-.1L3.5 15.2z" transform="rotate(135 12 12)"/></svg><span>结束 FaceTime</span></button>
+        <small class="ios6-facetime-footnote">FACETIME · 照片展示演示，不会调用摄像头</small>
+      </footer>
+    </section>
+    <button type="button" id="call-minimized-icon" class="call-minimized-icon" aria-label="返回通话" title="返回通话" hidden>
+      <span class="call-mini-gloss" aria-hidden="true"></span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 3.8c-.7-.4-1.5-.2-1.9.4L3.4 6.5c-.4.7-.3 1.5.2 2.1 2.8 3.7 6.1 6.9 9.8 9.8.6.5 1.4.6 2.1.2l2.3-1.3c.7-.4.9-1.2.4-1.9l-2.1-2.7c-.4-.5-1.1-.7-1.7-.4l-2 1c-1.8-1-3.3-2.5-4.3-4.3l1-2c.3-.6.1-1.3-.4-1.7L6.6 3.8z"/></svg>
+      <span class="call-mini-pulse" aria-hidden="true"></span>
+    </button>
     <div class="screen">
       <section class="page list-page" id="page-message">
         <article class="profile-card">

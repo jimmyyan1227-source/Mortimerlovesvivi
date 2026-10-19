@@ -251,6 +251,22 @@
     const group = document.createElement("div"); group.className = `message ${message.type === "sent" ? "sent" : "received"}`;
     if (Array.isArray(message.cardIds) && message.cardIds.length > 1) group.classList.add("combo-message");
     group.dataset.messageId = message.id;
+    if (message.kind === "call-log") {
+      group.className = `message call-log-message ${message.callStatus === "missed" ? "call-log-missed" : "call-log-ended"}`;
+      const card = document.createElement("article"); card.className = "call-log-card";
+      const icon = document.createElement("span"); icon.className = "call-log-icon"; icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = message.callStatus === "missed"
+        ? '<svg viewBox="0 0 24 24"><path d="M4 14.5c4.5-3.8 11.5-3.8 16 0l-2.1 3.1-3.3-1.3-.3-2.1a10 10 0 0 0-4.6 0l-.3 2.1-3.3 1.3L4 14.5Z"/><path d="M5 4l14 16"/></svg>'
+        : '<svg viewBox="0 0 24 24"><path d="M4 14.5c4.5-3.8 11.5-3.8 16 0l-2.1 3.1-3.3-1.3-.3-2.1a10 10 0 0 0-4.6 0l-.3 2.1-3.3 1.3L4 14.5Z"/></svg>';
+      const copy = document.createElement("div"); copy.className = "call-log-copy";
+      const title = document.createElement("strong"); title.textContent = message.callStatus === "missed" ? "未接听" : "通话结束";
+      const detail = document.createElement("span"); detail.textContent = message.callStatus === "missed" ? (message.contactName || "对方") : `通话时长 ${formatCallTime(message.durationSeconds || 0)}`;
+      const stamp = document.createElement("time"); stamp.className = "call-log-timestamp";
+      const when = new Date(message.callEndedAt || message.createdAt || Date.now());
+      stamp.dateTime = when.toISOString();
+      stamp.textContent = `${when.getFullYear()}/${String(when.getMonth()+1).padStart(2,"0")}/${String(when.getDate()).padStart(2,"0")}  ${String(when.getHours()).padStart(2,"0")}:${String(when.getMinutes()).padStart(2,"0")}`;
+      copy.append(title, detail, stamp); card.append(icon, copy); group.append(card); container.append(group); return;
+    }
     if (selectionMode) {
       group.classList.add("selecting");
       if (selectedMessageIds.has(message.id)) group.classList.add("selected-message");
@@ -1251,10 +1267,297 @@
   $$("[data-sticker]").forEach(button => button.addEventListener("click", () => { const sticker = button.dataset.sticker; $("#sticker-tray").hidden = true; sendSpecialMessage({ kind: "sticker", text: sticker }, true); }));
   $("#camera-btn").addEventListener("click", () => showModal("Camera", "这是一个复古界面 Demo，目前不会调用设备相机或上传真实照片。", "▣"));
   $("#voice-btn").addEventListener("click", recordVoiceMessage);
+  let callConnectTimeout = null, callTickInterval = null, callStartedAt = 0, callConnected = false, activeCallContact = null, activeCallStartedAt = 0;
+  let dialpadValue = "", dtmfAudioContext = null;
+  const DTMF_FREQUENCIES = {
+    "1": [697, 1209], "2": [697, 1336], "3": [697, 1477],
+    "4": [770, 1209], "5": [770, 1336], "6": [770, 1477],
+    "7": [852, 1209], "8": [852, 1336], "9": [852, 1477],
+    "*": [941, 1209], "0": [941, 1336], "#": [941, 1477]
+  };
+  function playDtmfTone(digit) {
+    const frequencies = DTMF_FREQUENCIES[digit];
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!frequencies || !AudioContextClass) return;
+    try {
+      if (!dtmfAudioContext) dtmfAudioContext = new AudioContextClass();
+      const context = dtmfAudioContext;
+      const play = () => {
+        const now = context.currentTime;
+        const gain = context.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.16, now + 0.008);
+        gain.gain.setValueAtTime(0.16, now + 0.105);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.155);
+        gain.connect(context.destination);
+        let remaining = frequencies.length;
+        frequencies.forEach(frequency => {
+          const oscillator = context.createOscillator();
+          oscillator.type = "sine"; oscillator.frequency.setValueAtTime(frequency, now);
+          oscillator.connect(gain); oscillator.onended = () => { oscillator.disconnect(); remaining -= 1; if (!remaining) gain.disconnect(); };
+          oscillator.start(now); oscillator.stop(now + 0.16);
+        });
+      };
+      if (context.state === "suspended") context.resume().then(play).catch(() => {});
+      else play();
+    } catch (error) { /* Older browsers may not support Web Audio; keypad input still works. */ }
+  }
+  function clearDialpadDisplay() {
+    const display = $("#dialpad-display");
+    if (!display) return;
+    // Support either an <input> or the current <output>; clear both value and
+    // rendered content so no stale text/HTML can survive between openings.
+    if ("value" in display) display.value = "";
+    display.textContent = "";
+    display.replaceChildren();
+  }
+  function renderDialpadValue() {
+    const display = $("#dialpad-display");
+    if (!display) return;
+    const cleanValue = String(dialpadValue || "");
+    if ("value" in display) display.value = cleanValue;
+    else display.textContent = cleanValue;
+  }
+  // The dialpad display must be blank on initial page load.
+  dialpadValue = "";
+  clearDialpadDisplay();
+  function setDialpadOpen(open) {
+    const panel = $("#ios6-dialpad-panel");
+    const button = $("#tool-keypad");
+    if (!panel || !button) return;
+    panel.classList.toggle("is-open", open);
+    panel.setAttribute("aria-hidden", String(!open));
+    const callContent = panel.closest(".ios6-call-content");
+    if (callContent) callContent.classList.toggle("dialpad-open", open);
+    button.classList.toggle("active", open);
+    button.setAttribute("aria-pressed", String(open));
+  }
+  function formatCallTime(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`; }
+  function formatClockTime(date = new Date()) { return `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`; }
+  function saveCallLog(status, durationSeconds = 0) {
+    if (!activeCallContact) return;
+    const contactId = activeCallContact.id || activeContactId;
+    const endedAt = new Date();
+    const record = { id: uid(), kind: "call-log", type: "received", callStatus: status, contactId, contactName: activeCallContact.name || "联系人", durationSeconds: Math.max(0, Math.floor(durationSeconds)), callStartedAt: activeCallStartedAt || endedAt.getTime(), callEndedAt: endedAt.toISOString(), time: formatClockTime(endedAt), createdAt: endedAt.getTime() };
+    if (!Array.isArray(state.messages[contactId])) state.messages[contactId] = [];
+    state.messages[contactId].push(record);
+    const dateText = `${String(endedAt.getMonth()+1).padStart(2,"0")}/${String(endedAt.getDate()).padStart(2,"0")} ${formatClockTime(endedAt)}`;
+    state.previews[contactId] = status === "missed" ? `未接听 · ${dateText}` : `通话结束 ${formatCallTime(durationSeconds)} · ${dateText}`;
+    const contact = CONTACTS.find(item => item.id === contactId);
+    if (contact) contact.time = formatClockTime(endedAt);
+    saveState();
+    renderConversations();
+    if (inChat && activeContactId === contactId) renderMessages();
+  }
+  function startCall(contactArg) {
+    const contact = (contactArg && typeof contactArg === "object") ? contactArg : currentContact();
+    const panel = $("#call-screen");
+    if (!panel) return;
+    clearTimeout(callConnectTimeout); clearInterval(callTickInterval);
+    callConnectTimeout = null; callTickInterval = null; callConnected = false; callStartedAt = 0;
+    activeCallContact = contact; activeCallStartedAt = Date.now();
+    dialpadValue = ""; renderDialpadValue(); setDialpadOpen(false);
+    $("#call-contact-name").textContent = contact.name || (typeof contactArg === "string" ? contactArg : "联系人");
+    const avatar = $("#call-avatar");
+    avatar.src = contact.avatar || currentContact().avatar || "";
+    avatar.alt = `${contact.name || "联系人"}的头像`;
+    const status = $("#call-status");
+    status.className = "ios6-status-connecting";
+    status.innerHTML = '<span class="ios6-pulse-ring" aria-hidden="true"></span>正在呼叫...';
+    ["#tool-mute", "#tool-keypad", "#tool-speaker"].forEach(selector => { const el = $(selector); el.classList.remove("active"); el.setAttribute("aria-pressed", "false"); });
+    panel.classList.remove("hidden", "is-minimized"); panel.setAttribute("aria-hidden", "false"); panel.setAttribute("aria-modal", "true");
+    const miniIcon = $("#call-minimized-icon");
+    if (miniIcon) { miniIcon.hidden = true; miniIcon.classList.remove("is-visible"); }
+    callConnectTimeout = setTimeout(() => {
+      if (panel.classList.contains("hidden")) return;
+      callConnected = true; callStartedAt = Date.now();
+      status.className = "ios6-status-timer"; status.textContent = "00:00";
+      callTickInterval = setInterval(() => {
+        if (!callConnected || panel.classList.contains("hidden")) return;
+        status.textContent = formatCallTime(Math.floor((Date.now() - callStartedAt) / 1000));
+      }, 500);
+    }, 1500);
+  }
+  function minimizeCall() {
+    const panel = $("#call-screen");
+    if (!activeCallContact || !panel || panel.classList.contains("hidden")) return;
+    setDialpadOpen(false);
+    panel.classList.add("is-minimized");
+    panel.setAttribute("aria-hidden", "true");
+    panel.setAttribute("aria-modal", "false");
+    const miniIcon = $("#call-minimized-icon");
+    if (miniIcon) { miniIcon.hidden = false; requestAnimationFrame(() => miniIcon.classList.add("is-visible")); }
+  }
+  function restoreCall() {
+    const panel = $("#call-screen");
+    if (!activeCallContact || !panel) return;
+    panel.classList.remove("is-minimized", "hidden");
+    panel.setAttribute("aria-hidden", "false");
+    panel.setAttribute("aria-modal", "true");
+    const miniIcon = $("#call-minimized-icon");
+    if (miniIcon) { miniIcon.classList.remove("is-visible"); setTimeout(() => { if (!panel.classList.contains("is-minimized")) miniIcon.hidden = true; }, 180); }
+  }
+  function endCall() {
+    const hadActiveCall = Boolean(activeCallContact);
+    const wasConnected = callConnected;
+    const duration = wasConnected && callStartedAt ? Math.floor((Date.now() - callStartedAt) / 1000) : 0;
+    clearTimeout(callConnectTimeout); clearInterval(callTickInterval);
+    callConnectTimeout = null; callTickInterval = null; callConnected = false; callStartedAt = 0;
+    const panel = $("#call-screen");
+    setDialpadOpen(false);
+    if (panel) { panel.classList.remove("is-minimized"); panel.classList.add("hidden"); panel.setAttribute("aria-hidden", "true"); panel.setAttribute("aria-modal", "false"); }
+    const miniIcon = $("#call-minimized-icon");
+    if (miniIcon) { miniIcon.classList.remove("is-visible"); miniIcon.hidden = true; }
+    if (hadActiveCall) saveCallLog(wasConnected ? "ended" : "missed", duration);
+    activeCallContact = null; activeCallStartedAt = 0;
+  }
+  let faceTimeTickInterval = null, faceTimeStartedAt = 0, faceTimeReturnToCall = false, faceTimeObjectUrl = null;
+  function openFaceTime(contactArg, fromCall = false) {
+    const contact = (contactArg && typeof contactArg === "object") ? contactArg : currentContact();
+    const panel = $("#facetime-screen");
+    if (!panel) return;
+    clearInterval(faceTimeTickInterval);
+    faceTimeTickInterval = null;
+    faceTimeStartedAt = Date.now();
+    faceTimeReturnToCall = Boolean(fromCall && activeCallContact);
+    $("#facetime-contact-name").textContent = contact.name || "联系人";
+    $("#facetime-status").textContent = "视频展示已连接";
+    $("#facetime-timer").textContent = "00:00";
+    const portrait = $("#facetime-portrait");
+    portrait.classList.remove("is-mirrored");
+    portrait.alt = `${contact.name || "联系人"}的展示照片`;
+    portrait.src = contact.avatar || currentContact().avatar || "";
+    $("#facetime-empty").hidden = Boolean(portrait.src);
+    $("#facetime-mute").setAttribute("aria-pressed", "false");
+    $("#facetime-flip").setAttribute("aria-pressed", "false");
+    panel.classList.remove("hidden");
+    panel.setAttribute("aria-hidden", "false");
+    panel.setAttribute("aria-modal", "true");
+    requestAnimationFrame(() => panel.classList.add("is-visible"));
+    faceTimeTickInterval = setInterval(() => {
+      $("#facetime-timer").textContent = formatCallTime(Math.floor((Date.now() - faceTimeStartedAt) / 1000));
+    }, 500);
+  }
+  function closeFaceTime() {
+    const panel = $("#facetime-screen");
+    if (!panel || panel.classList.contains("hidden")) return;
+    clearInterval(faceTimeTickInterval);
+    faceTimeTickInterval = null;
+    faceTimeStartedAt = 0;
+    panel.classList.remove("is-visible");
+    panel.setAttribute("aria-hidden", "true");
+    panel.setAttribute("aria-modal", "false");
+    setTimeout(() => {
+      if (!panel.classList.contains("is-visible")) panel.classList.add("hidden");
+      if (faceTimeReturnToCall && activeCallContact) restoreCall();
+      faceTimeReturnToCall = false;
+    }, 280);
+  }
+  function chooseFaceTimePhoto() { $("#facetime-photo-input").click(); }
   $$(".action-btn").forEach(button => button.addEventListener("click", () => {
-    const actions = { call: ["Call", "正在模拟拨打语音电话……对方暂时无法接听。", "☎"], facetime: ["FaceTime", "正在连接视频信号……这是视觉演示，不会发起真实视频通话。", "▣"], contact: ["Contact", "联系人卡片已打开。转账为视觉模拟，不会发起真实支付。", "♙"] };
-    showModal(...actions[button.dataset.action]);
+    if (button.dataset.action === "call") { startCall(currentContact()); return; }
+    if (button.dataset.action === "facetime") { openFaceTime(currentContact(), false); return; }
+    const actions = { contact: ["Contact", "联系人卡片已打开。转账为视觉模拟，不会发起真实支付。", "♙"] };
+    if (actions[button.dataset.action]) showModal(...actions[button.dataset.action]);
   }));
+  $("#call-end-btn").addEventListener("click", endCall);
+  $("#call-back-btn").addEventListener("click", minimizeCall);
+  $("#call-minimized-icon").addEventListener("click", () => { if (!$("#call-minimized-icon").dataset.dragged) restoreCall(); });
+  // The floating call chip can be dragged anywhere inside the phone frame.
+  (() => {
+    const chip = $("#call-minimized-icon");
+    const phone = $(".phone");
+    if (!chip || !phone) return;
+    let pointerStartX = 0, pointerStartY = 0, chipStartX = 0, chipStartY = 0, dragging = false;
+    chip.addEventListener("pointerdown", event => {
+      if (chip.hidden) return;
+      const rect = chip.getBoundingClientRect();
+      const parent = phone.getBoundingClientRect();
+      pointerStartX = event.clientX; pointerStartY = event.clientY;
+      chipStartX = rect.left - parent.left; chipStartY = rect.top - parent.top;
+      dragging = false; chip.dataset.dragged = "";
+      chip.setPointerCapture(event.pointerId);
+    });
+    chip.addEventListener("pointermove", event => {
+      if (!chip.hasPointerCapture(event.pointerId)) return;
+      const dx = event.clientX - pointerStartX, dy = event.clientY - pointerStartY;
+      if (Math.abs(dx) + Math.abs(dy) > 5) dragging = true;
+      if (!dragging) return;
+      const maxX = phone.clientWidth - chip.offsetWidth - 4;
+      const maxY = phone.clientHeight - chip.offsetHeight - 4;
+      chip.style.left = `${Math.max(4, Math.min(maxX, chipStartX + dx))}px`;
+      chip.style.top = `${Math.max(4, Math.min(maxY, chipStartY + dy))}px`;
+      chip.style.right = "auto"; chip.style.bottom = "auto";
+    });
+    const finishDrag = () => { if (dragging) { chip.dataset.dragged = "true"; setTimeout(() => { chip.dataset.dragged = ""; }, 0); } dragging = false; };
+    chip.addEventListener("pointerup", finishDrag);
+    chip.addEventListener("pointercancel", finishDrag);
+  })();
+  const callTools = {
+    "#tool-mute": { label: "静音", toggle: true },
+    "#tool-speaker": { label: "免提", toggle: true }
+  };
+  Object.entries(callTools).forEach(([selector]) => $(selector).addEventListener("click", () => {
+    const button = $(selector);
+    const active = button.classList.toggle("active");
+    button.setAttribute("aria-pressed", String(active));
+  }));
+  $("#tool-keypad").addEventListener("click", () => {
+    const opening = !$("#ios6-dialpad-panel").classList.contains("is-open");
+    // Always start with a clean display whenever the keypad is opened.
+    if (opening) {
+      dialpadValue = "";
+      clearDialpadDisplay();
+      renderDialpadValue();
+    }
+    setDialpadOpen(opening);
+  });
+  $$("[data-dial-digit]").forEach(button => button.addEventListener("click", () => {
+    const digit = button.dataset.dialDigit;
+    if (!Object.prototype.hasOwnProperty.call(DTMF_FREQUENCIES, digit)) return;
+    dialpadValue = (dialpadValue + digit).slice(-40);
+    renderDialpadValue(); playDtmfTone(digit);
+  }));
+  $("#dialpad-delete").addEventListener("click", () => { dialpadValue = dialpadValue.slice(0, -1); renderDialpadValue(); });
+  $("#dialpad-close").addEventListener("click", () => setDialpadOpen(false));
+  $("#tool-add").addEventListener("click", () => showModal("添加通话", "这是界面演示，暂不支持真实的多方通话。", "＋"));
+  $("#tool-facetime").addEventListener("click", () => openFaceTime(activeCallContact || currentContact(), Boolean(activeCallContact)));
+  $("#facetime-end-btn").addEventListener("click", closeFaceTime);
+  $("#facetime-upload-top").addEventListener("click", chooseFaceTimePhoto);
+  $("#facetime-change-photo").addEventListener("click", chooseFaceTimePhoto);
+  $("#facetime-photo-input").addEventListener("change", event => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { showModal("图片格式不支持", "请选择 JPG、PNG、WebP 等图片文件。", "!"); event.target.value = ""; return; }
+    if (faceTimeObjectUrl) URL.revokeObjectURL(faceTimeObjectUrl);
+    faceTimeObjectUrl = URL.createObjectURL(file);
+    const portrait = $("#facetime-portrait");
+    portrait.src = faceTimeObjectUrl;
+    portrait.alt = `${file.name}（本地展示图片）`;
+    $("#facetime-empty").hidden = true;
+    event.target.value = "";
+  });
+  $("#facetime-mute").addEventListener("click", event => {
+    const button = event.currentTarget;
+    button.setAttribute("aria-pressed", String(button.getAttribute("aria-pressed") !== "true"));
+  });
+  $("#facetime-flip").addEventListener("click", event => {
+    const button = event.currentTarget;
+    const active = button.getAttribute("aria-pressed") !== "true";
+    button.setAttribute("aria-pressed", String(active));
+    $("#facetime-portrait").classList.toggle("is-mirrored", active);
+  });
+  $("#tool-contacts").addEventListener("click", () => showModal("通讯录", "当前通话联系人：" + currentContact().name, "♙"));
+  document.addEventListener("keydown", event => {
+    const callPanel = $("#call-screen");
+    if (event.key !== "Escape") return;
+    const faceTimePanel = $("#facetime-screen");
+    if (faceTimePanel && !faceTimePanel.classList.contains("hidden")) { closeFaceTime(); return; }
+    if (callPanel.classList.contains("hidden")) return;
+    if (callPanel.classList.contains("is-minimized")) return;
+    if ($("#ios6-dialpad-panel").classList.contains("is-open")) setDialpadOpen(false);
+    else minimizeCall();
+  });
   $("#modal-ok").addEventListener("click", () => closeModal(true)); $("#modal-cancel").addEventListener("click", () => closeModal(false));
   $("#modal").addEventListener("click", event => { if (event.target === $("#modal")) closeModal(false); }); document.addEventListener("keydown", event => { if (event.key === "Escape") closeModal(false); });
   $$(".mood-chip").forEach(button => button.addEventListener("click", () => { currentFilter = button.dataset.filter; $$(".mood-chip").forEach(chip => chip.classList.toggle("active", chip === button)); renderConversations(); }));
