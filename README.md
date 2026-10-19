@@ -114,3 +114,8 @@ retro-otome/
 
 - 通话界面点击「拨号键盘」会从底部滑出白色复古 12 键键盘，包含 0–9、*、#；再次点击功能按钮或按「完成」可收起。
 - 点击按键会把数字或符号显示在键盘上方，并通过浏览器 Web Audio API 合成对应的双音多频（DTMF）按键音。该功能仅在本地播放音效，不会向真实电话线路发送按键信号。
+
+## Notes V4 update
+- The feature-phone letter reader's right softkey is now labeled **退出** and exits directly to the Notes home screen.
+- The personal letter editor now shows **这封信写给** with only **莫蒂** as the recipient. New user-authored letters are saved as written by 薇薇 and addressed to 莫蒂.
+- The collected-card picker is hidden while writing letters or diary entries; it remains available for Card Collage only.

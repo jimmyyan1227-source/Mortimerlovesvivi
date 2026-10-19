@@ -177,8 +177,11 @@
           <div class="notes-saved-list" id="notes-saved-list"></div>
         </div>
         <div id="note-collection" hidden>
-          <button class="text-back" id="collection-back">‹ Notes</button>
-          <div class="collection-actions-top"><button class="small-blue-btn secondary" id="batch-delete-notes" disabled>删除所选 (0)</button></div>
+          <div class="collection-actions-top">
+            <button class="small-blue-btn secondary collection-exit-btn" id="collection-back" type="button">‹ 退出</button>
+            <button class="small-blue-btn secondary collection-edit-btn" id="edit-selected-note" type="button" disabled>编辑所选</button>
+            <button class="small-blue-btn danger-action" id="batch-delete-notes" type="button" disabled>删除所选 (0)</button>
+          </div>
           <div id="note-collection-groups"></div>
           <button class="new-note-button" id="create-collection-note">＋ 写一封信</button>
         </div>
@@ -191,7 +194,7 @@
               <p class="feature-sms-line"><strong id="reader-prefix">【薇薇】:</strong><span id="reader-sms-content"></span></p>
             </article>
             <div class="feature-options-menu" id="reader-options-menu" hidden><button type="button" id="reader-menu-edit">编辑信件</button><button type="button" id="reader-menu-delete">删除信件</button></div>
-            <div class="feature-softkeys" role="group" aria-label="信件功能按键"><button type="button" id="reader-options-button">选项</button><button type="button" id="reader-reply-button">回复</button><button type="button" id="reader-return-button">返回</button></div>
+            <div class="feature-softkeys" role="group" aria-label="信件功能按键"><button type="button" id="reader-options-button">选项</button><button type="button" id="reader-reply-button">回复</button><button type="button" id="reader-return-button">退出</button></div>
           </section>
           <section id="diary-reader-legacy" hidden>
             <button class="text-back" id="reader-back">‹ 返回日记</button>
@@ -203,11 +206,12 @@
           <button class="text-back" id="notes-back">‹ All Notes</button>
           <div class="editor-paper">
             <label for="note-title">Title</label><input id="note-title" maxlength="80" placeholder="A little thing to remember...">
-            <label for="note-owner">这份记录属于</label><select id="note-owner"><option value="vivi">薇薇</option><option value="mortimer">莫蒂</option></select>
+            <div id="note-owner-field"><label id="note-owner-label" for="note-owner">这份记录属于</label><select id="note-owner"><option value="vivi">薇薇</option><option value="mortimer">莫蒂</option></select></div>
+            <div id="note-recipient-field" hidden><label for="note-recipient">这封信写给</label><select id="note-recipient"><option value="mortimer">莫蒂</option></select></div>
             <label for="note-content">Your words</label><textarea id="note-content" placeholder="把那些没来得及说出口的话，留在这里……"></textarea>
           </div>
           <div class="editor-actions"><button class="small-blue-btn" id="save-note">Save note</button><button class="small-blue-btn secondary" id="delete-note" hidden>Delete</button></div>
-          <div class="editor-card-tools"><strong>Pick a collected card</strong><div class="card-tags compact-tags" id="note-card-tags"></div></div>
+          <div class="editor-card-tools" id="note-card-tools"><strong>Pick a collected card</strong><div class="card-tags compact-tags" id="note-card-tags"></div></div>
         </div>
       </section>
 

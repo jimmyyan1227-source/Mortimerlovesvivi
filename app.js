@@ -886,9 +886,16 @@
       }); root.append(section);
     }); updateNoteBatchButton();
   }
-  function updateNoteBatchButton() { const b = $("#batch-delete-notes"); b.disabled = selectedNoteIds.size === 0; b.textContent = `删除所选 (${selectedNoteIds.size})`; }
+  function updateNoteBatchButton() {
+    const deleteButton = $("#batch-delete-notes");
+    deleteButton.disabled = selectedNoteIds.size === 0;
+    deleteButton.textContent = `删除所选 (${selectedNoteIds.size})`;
+    const editButton = $("#edit-selected-note");
+    editButton.disabled = selectedNoteIds.size !== 1;
+    editButton.textContent = selectedNoteIds.size > 1 ? "编辑所选 (仅限一条)" : "编辑所选";
+  }
   function openNoteReader(id) {
-    const note = state.notes.find(n => n.id === id); if (!note) return; readingNoteId = id;
+    const note = state.notes.find(n => n.id === id); if (!note) return; readingNoteId = id; currentNoteKind = note.type;
     $("#note-collection").hidden = true; $("#note-reader").hidden = false; $("#note-editor").hidden = true;
     const isLetter = note.type === "letter";
     $("#feature-letter-reader").hidden = !isLetter;
@@ -920,7 +927,8 @@
   function replyToReadingNote() {
     const note = state.notes.find(n => n.id === readingNoteId); if (!note || note.type !== "letter") return;
     openNoteEditor("letter");
-    $("#note-owner").value = (note.owner || "vivi") === "mortimer" ? "vivi" : "mortimer";
+    // User-authored letters are always addressed to Mortimer. Character-authored letters will use a separate flow later.
+    $("#note-recipient").value = "mortimer";
     const subject = note.title || "无题信件";
     $("#note-title").value = (`Re: ${subject}`).slice(0, 80);
     $("#note-content").value = "";
@@ -931,7 +939,14 @@
     const note = id ? state.notes.find(item => item.id === id) : null;
     $("#notes-home").hidden = true; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = false;
     $("#note-title").value = note?.title || ({ letter: "A letter to you", diary: "Today's fragments", collage: "Collected words" })[type] || "Untitled";
-    $("#note-content").value = note?.content || (type === "collage" ? state.collected.slice(0, 4).join("\n") : ""); $("#note-owner").value = note?.owner || "vivi";
+    $("#note-content").value = note?.content || (type === "collage" ? state.collected.slice(0, 4).join("\n") : "");
+    $("#note-owner").value = note?.owner || "vivi";
+    $("#note-owner-field").hidden = type === "letter";
+    $("#note-recipient-field").hidden = type !== "letter";
+    $("#note-owner-label").textContent = type === "diary" ? "这份日记属于" : "这份记录属于";
+    $("#note-recipient").value = note?.recipient || "mortimer";
+    // Collected-card insertion is reserved for the card-collage editor, not personal letters or diary entries.
+    $("#note-card-tools").hidden = type !== "collage";
     $("#delete-note").hidden = !note; renderNoteCardTags(); renderLayout();
   }
   function renderNoteCardTags() {
@@ -947,8 +962,18 @@
     const content = $("#note-content").value.trim();
     if (!content) { showModal("Nothing to save", "先写下一点内容，再把它留存起来吧。", "✉"); return; }
     let note;
-    if (editingNoteId) { note = state.notes.find(item => item.id === editingNoteId); if (note) Object.assign(note, { title, content, type: currentNoteKind, owner: $("#note-owner").value, date: todayKey(), updatedAt: Date.now() }); }
-    else { note = { id: uid(), type: currentNoteKind, owner: $("#note-owner").value, title, content, date: todayKey(), createdAt: Date.now() }; state.notes.unshift(note); }
+    if (editingNoteId) {
+      note = state.notes.find(item => item.id === editingNoteId);
+      if (note) {
+        const author = currentNoteKind === "letter" ? (note.owner || "vivi") : $("#note-owner").value;
+        Object.assign(note, { title, content, type: currentNoteKind, owner: author, date: todayKey(), updatedAt: Date.now() });
+        if (currentNoteKind === "letter") note.recipient = $("#note-recipient").value || "mortimer";
+      }
+    } else {
+      note = { id: uid(), type: currentNoteKind, owner: currentNoteKind === "letter" ? "vivi" : $("#note-owner").value, title, content, date: todayKey(), createdAt: Date.now() };
+      if (currentNoteKind === "letter") note.recipient = $("#note-recipient").value || "mortimer";
+      state.notes.unshift(note);
+    }
     saveState();
     editingNoteId = null; renderCalendar(); renderSavedDay(); if (["letter","diary"].includes(currentNoteKind)) { openNoteCollection(currentNoteKind); } else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; renderLayout(); renderNotes(); }
     showModal("Saved", "这段内容已保存到 Notes。Saved 只展示你在聊天中手动收藏的消息。", "✓");
@@ -1889,7 +1914,13 @@
     if (!choice) return; const type = choice.trim().toLowerCase(); if (!["letter", "diary", "collage"].includes(type)) { showModal("Type not found", "请输入 letter、diary 或 collage。", "✉"); return; } openNoteEditor(type);
   });
   $("#notes-back").addEventListener("click", () => { if (["letter","diary"].includes(currentNoteKind)) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; currentNoteKind = "all"; renderLayout(); renderNotes(); } });
-  $("#collection-back").addEventListener("click", () => { $("#notes-home").hidden=false; $("#note-collection").hidden=true; selectedNoteIds.clear(); renderLayout(); renderNotes(); });
+  $("#collection-back").addEventListener("click", () => { $("#notes-home").hidden=false; $("#note-collection").hidden=true; $("#note-reader").hidden=true; $("#note-editor").hidden=true; selectedNoteIds.clear(); readingNoteId = null; editingNoteId = null; currentNoteKind = "all"; renderLayout(); renderNotes(); });
+  $("#edit-selected-note").addEventListener("click", () => {
+    if (selectedNoteIds.size !== 1) return;
+    const id = selectedNoteIds.values().next().value;
+    const note = state.notes.find(item => item.id === id);
+    if (note) openNoteEditor(note.type, note.id);
+  });
   $("#reader-back").addEventListener("click", () => openNoteCollection(currentNoteKind));
   $("#create-collection-note").addEventListener("click", () => openNoteEditor(currentNoteKind));
   $("#reader-edit").addEventListener("click", () => { if (readingNoteId) openNoteEditor(currentNoteKind, readingNoteId); });
@@ -1898,7 +1929,13 @@
   $("#reader-menu-edit").addEventListener("click", () => { $("#reader-options-menu").hidden = true; if (readingNoteId) openNoteEditor("letter", readingNoteId); });
   $("#reader-menu-delete").addEventListener("click", () => { $("#reader-options-menu").hidden = true; deleteReadingNote(); });
   $("#reader-reply-button").addEventListener("click", replyToReadingNote);
-  $("#reader-return-button").addEventListener("click", () => { $("#reader-options-menu").hidden = true; openNoteCollection(currentNoteKind); });
+  $("#reader-return-button").addEventListener("click", () => {
+    // The right softkey is a real exit from the immersive reader to Notes home.
+    $("#reader-options-menu").hidden = true;
+    readingNoteId = null; editingNoteId = null; selectedNoteIds.clear();
+    $("#note-reader").hidden = true; $("#note-collection").hidden = true; $("#note-editor").hidden = true; $("#notes-home").hidden = false;
+    currentNoteKind = "all"; renderNotes(); renderLayout();
+  });
   $("#batch-delete-notes").addEventListener("click", async () => { if (!selectedNoteIds.size) return; const n=selectedNoteIds.size; if (await showModal("批量删除记录？",`确定删除选中的 ${n} 篇内容吗？此操作无法撤销。`,"!",{confirm:true,okText:"删除"})) { state.notes=state.notes.filter(note=>!selectedNoteIds.has(note.id)); selectedNoteIds.clear(); saveState(); renderNoteCollection(); renderNotes(); } });
   $("#save-note").addEventListener("click", saveNote);
   $("#delete-note").addEventListener("click", async () => { if (!editingNoteId) return; const note = state.notes.find(n => n.id === editingNoteId); if (await showModal("Delete this note?", note?.title || "This note", "!", { confirm: true, okText: "Delete" })) { state.notes = state.notes.filter(n => n.id !== editingNoteId); saveState(); editingNoteId = null; if (["letter","diary"].includes(currentNoteKind)) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; currentNoteKind = "all"; renderLayout(); renderNotes(); } } });
