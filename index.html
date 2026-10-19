@@ -76,14 +76,13 @@
           <strong id="facetime-contact-name">联系人</strong>
           <span><i class="ios6-facetime-live-dot" aria-hidden="true"></i><span id="facetime-status">正在连接</span><b id="facetime-timer">00:00</b></span>
         </div>
-        <button type="button" id="facetime-upload-top" class="ios6-facetime-upload" aria-label="更换角色照片">更换照片</button>
+        <button type="button" id="facetime-upload-top" class="ios6-facetime-upload ios6-facetime-photo-icon" aria-label="选择或更换角色照片" title="更换角色照片"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h3l1.5-2h5l1.5 2h3A2 2 0 0 1 19 9.5v8A2 2 0 0 1 17 19.5H5A2 2 0 0 1 3 17.5v-8a2 2 0 0 1 1-2Z"/><circle cx="11" cy="13.5" r="3.5"/><path d="M17 10h.01"/></svg></button>
       </header>
       <main class="ios6-facetime-main">
         <div class="ios6-facetime-frame" id="facetime-frame">
           <div class="ios6-facetime-frame-inner">
             <img id="facetime-portrait" class="ios6-facetime-portrait" src="" alt="当前角色照片" />
             <div class="ios6-facetime-empty" id="facetime-empty" hidden>选择一张角色照片<br><small>支持本地 JPG、PNG、WebP</small></div>
-            <label class="ios6-facetime-change" for="facetime-photo-input">上传 / 更换</label>
             <input id="facetime-photo-input" type="file" accept="image/*" hidden />
           </div>
           <span class="ios6-facetime-frame-gloss" aria-hidden="true"></span>
@@ -93,12 +92,17 @@
         <div class="ios6-facetime-control-row">
           <button type="button" class="ios6-facetime-control" id="facetime-mute" aria-pressed="false"><span class="ios6-facetime-control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/><path class="mute-slash" d="M4 4l16 16"/></svg></span><span>静音</span></button>
           <button type="button" class="ios6-facetime-control" id="facetime-flip" aria-pressed="false"><span class="ios6-facetime-control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM16 10l6-3v10l-6-3"/><path d="M7 4l-3 3 3 3M17 20l3-3-3-3"/></svg></span><span>镜像</span></button>
-          <button type="button" class="ios6-facetime-control" id="facetime-change-photo"><span class="ios6-facetime-control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg></span><span>展示图片</span></button>
+          <button type="button" class="ios6-facetime-control" id="facetime-minimize-btn" aria-label="最小化 FaceTime"><span class="ios6-facetime-control-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 16h10"/></svg></span><span>最小化</span></button>
         </div>
         <button type="button" id="facetime-end-btn" class="ios6-facetime-end"><span class="ios6-facetime-end-gloss" aria-hidden="true"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 15.2c-.3-.3-.4-.7-.2-1.1 1.2-2.5 3.3-4.5 5.8-5.7.4-.2.9-.1 1.2.2l2.3 2.3c.3.3.8.3 1.1 0l2.3-2.3c.4-.3.8-.4 1.2-.2 2.5 1.2 4.6 3.2 5.8 5.7.2.4.1.8-.2 1.1l-2.1 2.1c-.4.4-1 .4-1.4.1-2.2-1.5-4.7-2.3-7.4-2.3s-5.2.8-7.4 2.3c-.4.3-1 .3-1.4-.1L3.5 15.2z" transform="rotate(135 12 12)"/></svg><span>结束 FaceTime</span></button>
         <small class="ios6-facetime-footnote">FACETIME · 照片展示演示，不会调用摄像头</small>
       </footer>
     </section>
+    <button type="button" id="facetime-minimized-icon" class="facetime-minimized-icon" aria-label="恢复 FaceTime" title="恢复 FaceTime" hidden>
+      <span class="facetime-mini-gloss" aria-hidden="true"></span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="13" height="14" rx="3"/><path d="M15 10l7-4v12l-7-4z"/><circle cx="8.5" cy="12" r="2" fill="#d9e6f3" stroke="none"/></svg>
+      <span class="facetime-mini-pulse" aria-hidden="true"></span>
+    </button>
     <button type="button" id="call-minimized-icon" class="call-minimized-icon" aria-label="返回通话" title="返回通话" hidden>
       <span class="call-mini-gloss" aria-hidden="true"></span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 3.8c-.7-.4-1.5-.2-1.9.4L3.4 6.5c-.4.7-.3 1.5.2 2.1 2.8 3.7 6.1 6.9 9.8 9.8.6.5 1.4.6 2.1.2l2.3-1.3c.7-.4.9-1.2.4-1.9l-2.1-2.7c-.4-.5-1.1-.7-1.7-.4l-2 1c-1.8-1-3.3-2.5-4.3-4.3l1-2c.3-.6.1-1.3-.4-1.7L6.6 3.8z"/></svg>

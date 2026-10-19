@@ -255,12 +255,22 @@
       group.className = `message call-log-message ${message.callStatus === "missed" ? "call-log-missed" : "call-log-ended"}`;
       const card = document.createElement("article"); card.className = "call-log-card";
       const icon = document.createElement("span"); icon.className = "call-log-icon"; icon.setAttribute("aria-hidden", "true");
-      icon.innerHTML = message.callStatus === "missed"
-        ? '<svg viewBox="0 0 24 24"><path d="M4 14.5c4.5-3.8 11.5-3.8 16 0l-2.1 3.1-3.3-1.3-.3-2.1a10 10 0 0 0-4.6 0l-.3 2.1-3.3 1.3L4 14.5Z"/><path d="M5 4l14 16"/></svg>'
-        : '<svg viewBox="0 0 24 24"><path d="M4 14.5c4.5-3.8 11.5-3.8 16 0l-2.1 3.1-3.3-1.3-.3-2.1a10 10 0 0 0-4.6 0l-.3 2.1-3.3 1.3L4 14.5Z"/></svg>';
+      if (message.callType === "facetime") {
+        icon.innerHTML = '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="13" height="14" rx="3"/><path d="M15 10l7-4v12l-7-4z"/></svg>';
+      } else {
+        icon.innerHTML = message.callStatus === "missed"
+          ? '<svg viewBox="0 0 24 24"><path d="M4 14.5c4.5-3.8 11.5-3.8 16 0l-2.1 3.1-3.3-1.3-.3-2.1a10 10 0 0 0-4.6 0l-.3 2.1-3.3 1.3L4 14.5Z"/><path d="M5 4l14 16"/></svg>'
+          : '<svg viewBox="0 0 24 24"><path d="M4 14.5c4.5-3.8 11.5-3.8 16 0l-2.1 3.1-3.3-1.3-.3-2.1a10 10 0 0 0-4.6 0l-.3 2.1-3.3 1.3L4 14.5Z"/></svg>';
+      }
       const copy = document.createElement("div"); copy.className = "call-log-copy";
-      const title = document.createElement("strong"); title.textContent = message.callStatus === "missed" ? "未接听" : "通话结束";
-      const detail = document.createElement("span"); detail.textContent = message.callStatus === "missed" ? (message.contactName || "对方") : `通话时长 ${formatCallTime(message.durationSeconds || 0)}`;
+      const title = document.createElement("strong");
+      title.textContent = message.callStatus === "missed"
+        ? (message.callType === "facetime" ? "FaceTime 未接听" : "未接听")
+        : (message.callType === "facetime" ? "FaceTime 已结束" : "通话结束");
+      const detail = document.createElement("span");
+      detail.textContent = message.callStatus === "missed"
+        ? (message.contactName || "对方")
+        : `${message.callType === "facetime" ? "视频通话时长" : "通话时长"} ${formatCallTime(message.durationSeconds || 0)}`;
       const stamp = document.createElement("time"); stamp.className = "call-log-timestamp";
       const when = new Date(message.callEndedAt || message.createdAt || Date.now());
       stamp.dateTime = when.toISOString();
@@ -1334,15 +1344,17 @@
   }
   function formatCallTime(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`; }
   function formatClockTime(date = new Date()) { return `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`; }
-  function saveCallLog(status, durationSeconds = 0) {
-    if (!activeCallContact) return;
-    const contactId = activeCallContact.id || activeContactId;
+  function saveCallLog(status, durationSeconds = 0, contactOverride = null, callType = "call", startedAtOverride = 0) {
+    const logContact = contactOverride || activeCallContact;
+    if (!logContact) return;
+    const contactId = logContact.id || activeContactId;
     const endedAt = new Date();
-    const record = { id: uid(), kind: "call-log", type: "received", callStatus: status, contactId, contactName: activeCallContact.name || "联系人", durationSeconds: Math.max(0, Math.floor(durationSeconds)), callStartedAt: activeCallStartedAt || endedAt.getTime(), callEndedAt: endedAt.toISOString(), time: formatClockTime(endedAt), createdAt: endedAt.getTime() };
+    const record = { id: uid(), kind: "call-log", type: "received", callType, callStatus: status, contactId, contactName: logContact.name || "联系人", durationSeconds: Math.max(0, Math.floor(durationSeconds)), callStartedAt: startedAtOverride || activeCallStartedAt || endedAt.getTime(), callEndedAt: endedAt.toISOString(), time: formatClockTime(endedAt), createdAt: endedAt.getTime() };
     if (!Array.isArray(state.messages[contactId])) state.messages[contactId] = [];
     state.messages[contactId].push(record);
     const dateText = `${String(endedAt.getMonth()+1).padStart(2,"0")}/${String(endedAt.getDate()).padStart(2,"0")} ${formatClockTime(endedAt)}`;
-    state.previews[contactId] = status === "missed" ? `未接听 · ${dateText}` : `通话结束 ${formatCallTime(durationSeconds)} · ${dateText}`;
+    const callLabel = callType === "facetime" ? "FaceTime" : "通话";
+    state.previews[contactId] = status === "missed" ? `${callLabel}未接听 · ${dateText}` : `${callLabel}结束 ${formatCallTime(durationSeconds)} · ${dateText}`;
     const contact = CONTACTS.find(item => item.id === contactId);
     if (contact) contact.time = formatClockTime(endedAt);
     saveState();
@@ -1411,46 +1423,90 @@
     if (hadActiveCall) saveCallLog(wasConnected ? "ended" : "missed", duration);
     activeCallContact = null; activeCallStartedAt = 0;
   }
-  let faceTimeTickInterval = null, faceTimeStartedAt = 0, faceTimeReturnToCall = false, faceTimeObjectUrl = null;
+  let faceTimeTickInterval = null, faceTimeStartedAt = 0, faceTimeReturnToCall = false, faceTimeObjectUrl = null, faceTimeIsMinimized = false, faceTimeContact = null;
+  function updateFaceTimeTimer() {
+    if (!faceTimeStartedAt) return;
+    const timer = $("#facetime-timer");
+    if (timer) timer.textContent = formatCallTime(Math.floor((Date.now() - faceTimeStartedAt) / 1000));
+  }
   function openFaceTime(contactArg, fromCall = false) {
-    const contact = (contactArg && typeof contactArg === "object") ? contactArg : currentContact();
     const panel = $("#facetime-screen");
     if (!panel) return;
+    if (faceTimeIsMinimized && faceTimeStartedAt) { restoreFaceTime(); return; }
+    const contact = (contactArg && typeof contactArg === "object") ? contactArg : currentContact();
     clearInterval(faceTimeTickInterval);
     faceTimeTickInterval = null;
     faceTimeStartedAt = Date.now();
+    faceTimeContact = contact;
+    faceTimeIsMinimized = false;
     faceTimeReturnToCall = Boolean(fromCall && activeCallContact);
+    if (fromCall) setDialpadOpen(false);
     $("#facetime-contact-name").textContent = contact.name || "联系人";
     $("#facetime-status").textContent = "视频展示已连接";
     $("#facetime-timer").textContent = "00:00";
     const portrait = $("#facetime-portrait");
     portrait.classList.remove("is-mirrored");
     portrait.alt = `${contact.name || "联系人"}的展示照片`;
+    if (faceTimeObjectUrl) { URL.revokeObjectURL(faceTimeObjectUrl); faceTimeObjectUrl = null; }
     portrait.src = contact.avatar || currentContact().avatar || "";
     $("#facetime-empty").hidden = Boolean(portrait.src);
     $("#facetime-mute").setAttribute("aria-pressed", "false");
     $("#facetime-flip").setAttribute("aria-pressed", "false");
+    const mini = $("#facetime-minimized-icon");
+    mini.hidden = true; mini.classList.remove("is-visible"); mini.style.left = ""; mini.style.top = ""; mini.style.right = "12px"; mini.style.bottom = "";
     panel.classList.remove("hidden");
     panel.setAttribute("aria-hidden", "false");
     panel.setAttribute("aria-modal", "true");
     requestAnimationFrame(() => panel.classList.add("is-visible"));
-    faceTimeTickInterval = setInterval(() => {
-      $("#facetime-timer").textContent = formatCallTime(Math.floor((Date.now() - faceTimeStartedAt) / 1000));
-    }, 500);
+    faceTimeTickInterval = setInterval(updateFaceTimeTimer, 500);
   }
-  function closeFaceTime() {
+  function minimizeFaceTime() {
     const panel = $("#facetime-screen");
-    if (!panel || panel.classList.contains("hidden")) return;
-    clearInterval(faceTimeTickInterval);
-    faceTimeTickInterval = null;
-    faceTimeStartedAt = 0;
+    if (!panel || panel.classList.contains("hidden") || faceTimeIsMinimized) return;
+    faceTimeIsMinimized = true;
     panel.classList.remove("is-visible");
     panel.setAttribute("aria-hidden", "true");
     panel.setAttribute("aria-modal", "false");
+    const mini = $("#facetime-minimized-icon");
+    mini.hidden = false;
+    requestAnimationFrame(() => mini.classList.add("is-visible"));
+    setTimeout(() => { if (faceTimeIsMinimized) panel.classList.add("hidden"); }, 280);
+  }
+  function restoreFaceTime() {
+    const panel = $("#facetime-screen");
+    if (!panel) return;
+    faceTimeIsMinimized = false;
+    const mini = $("#facetime-minimized-icon");
+    mini.classList.remove("is-visible");
+    setTimeout(() => { if (!mini.classList.contains("is-visible")) mini.hidden = true; }, 220);
+    panel.classList.remove("hidden");
+    panel.setAttribute("aria-hidden", "false");
+    panel.setAttribute("aria-modal", "true");
+    requestAnimationFrame(() => panel.classList.add("is-visible"));
+    updateFaceTimeTimer();
+  }
+  function closeFaceTime() {
+    const panel = $("#facetime-screen");
+    if (!panel || (panel.classList.contains("hidden") && !faceTimeIsMinimized)) return;
+    const endedAt = Date.now();
+    const endedContact = faceTimeContact;
+    const startedAt = faceTimeStartedAt;
+    const duration = startedAt ? Math.floor((endedAt - startedAt) / 1000) : 0;
+    if (endedContact && startedAt) saveCallLog("ended", duration, endedContact, "facetime", startedAt);
+    clearInterval(faceTimeTickInterval);
+    faceTimeTickInterval = null;
+    faceTimeStartedAt = 0;
+    faceTimeIsMinimized = false;
+    panel.classList.remove("is-visible");
+    panel.setAttribute("aria-hidden", "true");
+    panel.setAttribute("aria-modal", "false");
+    const mini = $("#facetime-minimized-icon");
+    mini.classList.remove("is-visible"); mini.hidden = true;
     setTimeout(() => {
-      if (!panel.classList.contains("is-visible")) panel.classList.add("hidden");
+      panel.classList.add("hidden");
       if (faceTimeReturnToCall && activeCallContact) restoreCall();
       faceTimeReturnToCall = false;
+      faceTimeContact = null;
     }, 280);
   }
   function chooseFaceTimePhoto() { $("#facetime-photo-input").click(); }
@@ -1524,7 +1580,32 @@
   $("#tool-facetime").addEventListener("click", () => openFaceTime(activeCallContact || currentContact(), Boolean(activeCallContact)));
   $("#facetime-end-btn").addEventListener("click", closeFaceTime);
   $("#facetime-upload-top").addEventListener("click", chooseFaceTimePhoto);
-  $("#facetime-change-photo").addEventListener("click", chooseFaceTimePhoto);
+  $("#facetime-minimize-btn").addEventListener("click", minimizeFaceTime);
+  $("#facetime-minimized-icon").addEventListener("click", () => { if (!$("#facetime-minimized-icon").dataset.dragged) restoreFaceTime(); });
+  // Allow the minimized FaceTime tile to be repositioned within the phone screen.
+  (() => {
+    const chip = $("#facetime-minimized-icon");
+    const phone = $(".phone");
+    if (!chip || !phone) return;
+    let startX = 0, startY = 0, chipX = 0, chipY = 0, dragging = false;
+    chip.addEventListener("pointerdown", event => {
+      if (chip.hidden) return;
+      const rect = chip.getBoundingClientRect(), parent = phone.getBoundingClientRect();
+      startX = event.clientX; startY = event.clientY; chipX = rect.left - parent.left; chipY = rect.top - parent.top;
+      dragging = false; chip.dataset.dragged = ""; chip.setPointerCapture(event.pointerId);
+    });
+    chip.addEventListener("pointermove", event => {
+      if (!chip.hasPointerCapture(event.pointerId)) return;
+      const dx = event.clientX - startX, dy = event.clientY - startY;
+      if (Math.abs(dx) + Math.abs(dy) > 5) dragging = true;
+      if (!dragging) return;
+      const maxX = phone.clientWidth - chip.offsetWidth - 4, maxY = phone.clientHeight - chip.offsetHeight - 4;
+      chip.style.left = `${Math.max(4, Math.min(maxX, chipX + dx))}px`; chip.style.top = `${Math.max(4, Math.min(maxY, chipY + dy))}px`;
+      chip.style.right = "auto"; chip.style.bottom = "auto";
+    });
+    const finish = () => { if (dragging) { chip.dataset.dragged = "true"; setTimeout(() => { chip.dataset.dragged = ""; }, 0); } dragging = false; };
+    chip.addEventListener("pointerup", finish); chip.addEventListener("pointercancel", finish);
+  })();
   $("#facetime-photo-input").addEventListener("change", event => {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -1552,7 +1633,7 @@
     const callPanel = $("#call-screen");
     if (event.key !== "Escape") return;
     const faceTimePanel = $("#facetime-screen");
-    if (faceTimePanel && !faceTimePanel.classList.contains("hidden")) { closeFaceTime(); return; }
+    if (faceTimePanel && (!faceTimePanel.classList.contains("hidden") || faceTimeIsMinimized)) { closeFaceTime(); return; }
     if (callPanel.classList.contains("hidden")) return;
     if (callPanel.classList.contains("is-minimized")) return;
     if ($("#ios6-dialpad-panel").classList.contains("is-open")) setDialpadOpen(false);
