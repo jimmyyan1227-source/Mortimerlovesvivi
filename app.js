@@ -178,18 +178,18 @@
     $$(".tab-item").forEach(button => button.classList.toggle("active", button.dataset.tab === activeTab));
     $("#back-btn").hidden = !(inChat || (activeTab === "notes" && (!$("#note-editor").hidden || !$("#note-collection").hidden || !$("#note-reader").hidden)));
     const readingNote = state.notes.find(note => note.id === readingNoteId);
-    $(".phone").classList.toggle("feature-reader-active", activeTab === "notes" && !$("#note-reader").hidden && readingNote?.type === "letter");
+    $(".phone").classList.toggle("feature-reader-active", activeTab === "notes" && !$("#note-reader").hidden && ["letter", "diary"].includes(readingNote?.type));
     $("#top-action").hidden = false;
     $(".tab-bar").hidden = activeTab === "message" && inChat;
     $("#add-contact-btn").hidden = !(activeTab === "message" && !inChat);
     $(".phone").classList.toggle("chat-immersive", activeTab === "message" && inChat);
-    const titles = { message: inChat ? currentContact().name : "Message", notes: !$("#note-reader").hidden ? "Letter" : !$("#note-editor").hidden ? "Note Editor" : !$("#note-collection").hidden ? (currentNoteKind === "letter" ? "Letters" : "Diary") : "Notes", saved: "Saved", me: "Me" };
+    const titles = { message: inChat ? currentContact().name : "Message", notes: !$("#note-reader").hidden ? (currentNoteKind === "diary" ? "Diary" : "Letter") : !$("#note-editor").hidden ? "Note Editor" : !$("#note-collection").hidden ? ({ letter: "Letters", diary: "Diary", all: "All Fragments" }[currentNoteKind] || "Notes") : "Notes", saved: "Saved", me: "Me" };
     $("#top-title").textContent = titles[activeTab];
     $("#top-action").textContent = activeTab === "message" && inChat ? "Edit" : activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : (!$("#note-reader").hidden ? "Edit" : "＋ New")) : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
   }
   function switchTab(tab) {
     activeTab = tab; inChat = false; endSelectionMode();
-    if (tab === "notes") { $("#notes-home").hidden = false; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = true; editingNoteId = null; readingNoteId = null; selectedNoteIds.clear(); }
+    if (tab === "notes") { $("#notes-home").hidden = false; $("#notes-music-board").hidden = true; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = true; editingNoteId = null; readingNoteId = null; selectedNoteIds.clear(); }
     renderLayout();
     if (tab === "message") renderConversations();
     if (tab === "notes") renderNotes();
@@ -854,8 +854,9 @@
     const count = type => state.notes.filter(note => note.type === type).length;
     $("#letter-count").textContent = count("letter"); $("#diary-count").textContent = count("diary"); $("#collage-count").textContent = count("collage");
     const container = $("#notes-saved-list"); container.replaceChildren();
-    const shown = state.notes.filter(note => currentNoteKind === "all" || note.type === currentNoteKind);
-    if (!shown.length) { const empty = document.createElement("div"); empty.className = "empty-message"; empty.textContent = currentNoteKind === "all" ? "这里还空着。点击 New Note，保存第一段文字吧。" : "还没有这类内容，点击 New Note 开始创作。"; container.append(empty); return; }
+    // Letters and diary entries live only in their dedicated folders, never under the home New Note button.
+    const shown = state.notes.filter(note => note.type === "collage" && (currentNoteKind === "all" || note.type === currentNoteKind));
+    if (!shown.length) { const empty = document.createElement("div"); empty.className = "empty-message"; empty.textContent = currentNoteKind === "all" ? "信件和日记请从各自入口查看；这里不会重复显示它们。" : currentNoteKind === "collage" ? "还没有字卡拼贴，点击 New Note 开始创作。" : "这类记录会保存在专属列表中。"; container.append(empty); return; }
     shown.forEach(note => {
       const button = document.createElement("button"); button.type = "button"; button.className = "saved-note-row"; button.addEventListener("click", () => openNoteEditor(note.type, note.id));
       const copy = document.createElement("div"); const title = document.createElement("strong"); title.textContent = note.title || typeLabel(note.type);
@@ -868,12 +869,30 @@
   function openNoteCollection(type) {
     currentNoteKind = type; selectedNoteIds.clear();
     $("#notes-home").hidden = true; $("#note-collection").hidden = false; $("#note-reader").hidden = true; $("#note-editor").hidden = true;
-    $("#create-collection-note").textContent = type === "letter" ? "＋ 写一封信" : "＋ 写一篇日记";
+    $("#create-collection-note").textContent = type === "letter" ? "＋ 写一封信" : type === "diary" ? "＋ 写一篇日记" : "＋ 新建记录";
     renderNoteCollection(); renderLayout();
   }
   function renderNoteCollection() {
     const root = $("#note-collection-groups"); root.replaceChildren();
     const type = currentNoteKind;
+    if (type === "all") {
+      const section = document.createElement("section"); section.className = "note-owner-group";
+      const heading = document.createElement("div"); heading.className = "note-owner-heading";
+      const title = document.createElement("strong"); title.textContent = "全部内容";
+      const count = document.createElement("small"); count.textContent = `${state.notes.length} 篇`; heading.append(title, count); section.append(heading);
+      if (!state.notes.length) { const empty = document.createElement("div"); empty.className = "empty-message owner-empty"; empty.textContent = "这里还没有保存的内容。"; section.append(empty); }
+      state.notes.forEach(note => {
+        const row = document.createElement("div"); row.className = "collection-note-row";
+        const check = document.createElement("input"); check.type = "checkbox"; check.checked = selectedNoteIds.has(note.id); check.setAttribute("aria-label", `选择${note.title || typeLabel(note.type)}`); check.addEventListener("change", () => { check.checked ? selectedNoteIds.add(note.id) : selectedNoteIds.delete(note.id); updateNoteBatchButton(); });
+        const open = document.createElement("button"); open.type = "button"; open.className = "collection-note-open";
+        const title = document.createElement("strong"); title.textContent = note.title || (note.type === "letter" ? "无题信件" : note.type === "diary" ? "无题日记" : "无题拼贴");
+        const preview = document.createElement("small"); preview.textContent = `${typeLabel(note.type)} · ${dateLabel(note.date)}　${(note.content || "").replace(/\s+/g," ").slice(0,44)}`;
+        const arrow = document.createElement("span"); arrow.className = "row-arrow"; arrow.textContent = "›"; open.append(title, preview);
+        open.addEventListener("click", () => ["letter", "diary"].includes(note.type) ? openNoteReader(note.id) : openNoteEditor(note.type, note.id));
+        row.append(check, open, arrow); section.append(row);
+      });
+      root.append(section); updateNoteBatchButton(); return;
+    }
     [{owner:"vivi",label:type === "letter" ? "薇薇の信件" : "薇薇の日记"},{owner:"mortimer",label:type === "letter" ? "莫蒂の信件" : "莫蒂の日记"}].forEach(group => {
       const section = document.createElement("section"); section.className = "note-owner-group";
       const heading = document.createElement("div"); heading.className = "note-owner-heading"; const title = document.createElement("strong"); title.textContent = group.label; const count = document.createElement("small");
@@ -898,23 +917,20 @@
     const note = state.notes.find(n => n.id === id); if (!note) return; readingNoteId = id; currentNoteKind = note.type;
     $("#note-collection").hidden = true; $("#note-reader").hidden = false; $("#note-editor").hidden = true;
     const isLetter = note.type === "letter";
-    $("#feature-letter-reader").hidden = !isLetter;
-    $("#diary-reader-legacy").hidden = isLetter;
+    const sender = ownerLabel(note);
+    // Letters and diaries share the same clean feature-phone reader; the label keeps their meanings distinct.
+    $("#feature-letter-reader").hidden = false;
     $("#reader-options-menu").hidden = true;
-    if (isLetter) {
-      const sender = ownerLabel(note);
-      $("#reader-sender").textContent = sender;
-      $("#reader-timestamp").textContent = featurePhoneTimestamp(note);
-      $("#reader-subject").textContent = note.title || "无题信件";
-      $("#reader-prefix").textContent = `【${sender}】: `;
-      $("#reader-sms-content").textContent = note.content || "";
-    } else {
-      $("#reader-kind").textContent = "A PAGE FROM THE DIARY";
-      $("#reader-title").textContent = note.title || "无题日记";
-      $("#reader-content").textContent = note.content || "";
-      $("#reader-signoff").textContent = `—— ${ownerLabel(note)}`;
-      $("#reader-date").textContent = dateLabel(note.date);
-    }
+    $("#reader-sender").textContent = sender;
+    $("#reader-timestamp").textContent = featurePhoneTimestamp(note);
+    $("#reader-subject").textContent = note.title || (isLetter ? "无题信件" : "无题日记");
+    $("#reader-prefix").textContent = isLetter ? `【${sender}】: ` : `【${sender}的日记】 `;
+    $("#reader-sms-content").textContent = note.content || "";
+    const replyButton = $("#reader-reply-button");
+    const canReply = isLetter && note.owner === "mortimer";
+    replyButton.hidden = !canReply;
+    $("#reader-actions").classList.toggle("has-reply", canReply);
+    $("#reader-options-button").setAttribute("aria-label", isLetter ? "信件选项" : "日记选项");
     renderLayout();
   }
   async function deleteReadingNote() {
@@ -925,7 +941,7 @@
     }
   }
   function replyToReadingNote() {
-    const note = state.notes.find(n => n.id === readingNoteId); if (!note || note.type !== "letter") return;
+    const note = state.notes.find(n => n.id === readingNoteId); if (!note || note.type !== "letter" || note.owner !== "mortimer") return;
     openNoteEditor("letter");
     // User-authored letters are always addressed to Mortimer. Character-authored letters will use a separate flow later.
     $("#note-recipient").value = "mortimer";
@@ -970,13 +986,73 @@
         if (currentNoteKind === "letter") note.recipient = $("#note-recipient").value || "mortimer";
       }
     } else {
-      note = { id: uid(), type: currentNoteKind, owner: currentNoteKind === "letter" ? "vivi" : $("#note-owner").value, title, content, date: todayKey(), createdAt: Date.now() };
-      if (currentNoteKind === "letter") note.recipient = $("#note-recipient").value || "mortimer";
+      const createdAt = Date.now();
+      note = { id: uid(), type: currentNoteKind, owner: currentNoteKind === "letter" ? "vivi" : $("#note-owner").value, title, content, date: todayKey(), createdAt };
+      if (currentNoteKind === "letter") {
+        note.recipient = $("#note-recipient").value || "mortimer";
+        // Secretly decide the reply time once, when the letter is first saved.
+        // This timestamp is internal data only; it is never shown in the UI.
+        const twelveHours = 12 * 60 * 60 * 1000;
+        const minimumDelay = 60 * 1000;
+        note.replyDueAt = createdAt + minimumDelay + Math.floor(Math.random() * (twelveHours - minimumDelay + 1));
+      }
       state.notes.unshift(note);
     }
     saveState();
     editingNoteId = null; renderCalendar(); renderSavedDay(); if (["letter","diary"].includes(currentNoteKind)) { openNoteCollection(currentNoteKind); } else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; renderLayout(); renderNotes(); }
     showModal("Saved", "这段内容已保存到 Notes。Saved 只展示你在聊天中手动收藏的消息。", "✓");
+  }
+
+  // Deliver scheduled Mortimer letters from the active user-managed card library.
+  // The reply deadline is stored on the original Vivian letter but never displayed.
+  function processScheduledLetterReplies() {
+    const nowMs = Date.now();
+    const pool = allCards();
+    if (!pool.length) return 0;
+    const pending = state.notes.filter(note =>
+      note.type === "letter" && (note.owner || "vivi") === "vivi" &&
+      Number.isFinite(Number(note.replyDueAt)) && Number(note.replyDueAt) <= nowMs &&
+      !note.replyGeneratedAt && !note.replyCancelledAt
+    );
+    if (!pending.length) return 0;
+
+    let generated = 0;
+    pending.forEach(original => {
+      // Defensive duplicate guard for migrated or partially restored local data.
+      const existingReply = state.notes.find(note => note.type === "letter" && note.autoReplyTo === original.id);
+      if (existingReply) {
+        original.replyGeneratedAt = existingReply.createdAt || nowMs;
+        return;
+      }
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const count = 1 + Math.floor(Math.random() * Math.min(12, shuffled.length));
+      const picked = shuffled.slice(0, count);
+      const content = picked.map(card => card.text).join("");
+      if (!content.trim()) return;
+
+      const reply = {
+        id: uid(), type: "letter", owner: "mortimer", recipient: "vivi",
+        title: `Re: ${original.title || "A letter to you"}`.slice(0, 80),
+        content, date: todayKey(), createdAt: nowMs, updatedAt: nowMs,
+        autoReplyTo: original.id,
+        replyCardIds: picked.map(card => card.id)
+      };
+      original.replyGeneratedAt = nowMs;
+      state.notes.unshift(reply);
+      generated++;
+    });
+
+    if (generated || pending.some(note => note.replyGeneratedAt)) {
+      saveState();
+      renderNotes();
+      if (!$("#note-collection").hidden) renderNoteCollection();
+      renderMe();
+    }
+    return generated;
   }
 
   function renderCalendar() {
@@ -1903,9 +1979,11 @@
   $("#modal").addEventListener("click", event => { if (event.target === $("#modal")) closeModal(false); }); document.addEventListener("keydown", event => { if (event.key === "Escape") closeModal(false); });
   $$(".mood-chip").forEach(button => button.addEventListener("click", () => { currentFilter = button.dataset.filter; $$(".mood-chip").forEach(chip => chip.classList.toggle("active", chip === button)); renderConversations(); }));
   $("#profile-done").addEventListener("click", () => showModal("Profile", "个人主页已就绪。新的聊天字卡会被收进 Saved。", "♡"));
-  $$(".notes-row").forEach(button => button.addEventListener("click", () => {
+  $("#open-music-board").addEventListener("click", () => { $("#notes-home").hidden = true; $("#notes-music-board").hidden = false; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = true; renderLayout(); });
+  $("#music-board-back").addEventListener("click", () => { $("#notes-music-board").hidden = true; $("#notes-home").hidden = false; renderLayout(); });
+  $$(".notes-row[data-note-kind]").forEach(button => button.addEventListener("click", () => {
     const kind = button.dataset.noteKind;
-    if (["letter","diary"].includes(kind)) { openNoteCollection(kind); return; }
+    if (["letter", "diary", "all"].includes(kind)) { openNoteCollection(kind); return; }
     currentNoteKind = kind; $("#notes-home").hidden = false; $("#note-collection").hidden=true; $("#note-reader").hidden=true; $("#note-editor").hidden = true; editingNoteId = null; renderNotes(); renderLayout();
   }));
   $("#new-note").addEventListener("click", () => {
@@ -1921,16 +1999,20 @@
     const note = state.notes.find(item => item.id === id);
     if (note) openNoteEditor(note.type, note.id);
   });
-  $("#reader-back").addEventListener("click", () => openNoteCollection(currentNoteKind));
-  $("#create-collection-note").addEventListener("click", () => openNoteEditor(currentNoteKind));
-  $("#reader-edit").addEventListener("click", () => { if (readingNoteId) openNoteEditor(currentNoteKind, readingNoteId); });
-  $("#reader-delete").addEventListener("click", deleteReadingNote);
+  $("#create-collection-note").addEventListener("click", () => {
+    if (currentNoteKind !== "all") { openNoteEditor(currentNoteKind); return; }
+    const choice = window.prompt("新建内容类型：输入 letter（信件）、diary（日记）或 collage（字卡拼贴）", "letter");
+    if (!choice) return;
+    const type = choice.trim().toLowerCase();
+    if (!["letter", "diary", "collage"].includes(type)) { showModal("Type not found", "请输入 letter、diary 或 collage。", "✉"); return; }
+    openNoteEditor(type);
+  });
   $("#reader-options-button").addEventListener("click", () => { $("#reader-options-menu").hidden = !$("#reader-options-menu").hidden; });
-  $("#reader-menu-edit").addEventListener("click", () => { $("#reader-options-menu").hidden = true; if (readingNoteId) openNoteEditor("letter", readingNoteId); });
+  $("#reader-menu-edit").addEventListener("click", () => { $("#reader-options-menu").hidden = true; if (readingNoteId) openNoteEditor(currentNoteKind, readingNoteId); });
   $("#reader-menu-delete").addEventListener("click", () => { $("#reader-options-menu").hidden = true; deleteReadingNote(); });
   $("#reader-reply-button").addEventListener("click", replyToReadingNote);
-  $("#reader-return-button").addEventListener("click", () => {
-    // The right softkey is a real exit from the immersive reader to Notes home.
+  $("#reader-bottom-exit").addEventListener("click", () => {
+    // Exit closes the reader and returns to the Notes & Fragments home screen.
     $("#reader-options-menu").hidden = true;
     readingNoteId = null; editingNoteId = null; selectedNoteIds.clear();
     $("#note-reader").hidden = true; $("#note-collection").hidden = true; $("#note-editor").hidden = true; $("#notes-home").hidden = false;
@@ -2043,5 +2125,11 @@
     nameInput.focus();
   }
   $("#add-contact-btn").addEventListener("click", openAddContactModal);
+  // Run once on startup (to catch up on replies whose time passed while the page was closed),
+  // then poll while open. Foreground events also catch up after mobile/browser timer throttling.
+  processScheduledLetterReplies();
+  setInterval(processScheduledLetterReplies, 10000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") processScheduledLetterReplies(); });
+  window.addEventListener("focus", processScheduledLetterReplies);
   renderCustomStickers(); renderConversations(); renderMessages(); renderNotes(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderLayout();
 })();

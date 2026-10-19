@@ -169,12 +169,97 @@
       <section class="page notes-page" id="page-notes" hidden>
         <div class="page-intro"><span class="intro-glyph">✉</span><div><strong>Notes & Fragments</strong><small>little things worth keeping</small></div></div>
         <div id="notes-home">
+          <button class="notes-row notes-music-row" id="open-music-board" type="button"><span class="row-icon music-row-icon">♫</span><span class="row-copy"><strong>Music / 音乐</strong><small>收藏想一起听的旋律</small></span><span class="row-arrow">›</span></button>
           <button class="notes-row" data-note-kind="letter"><span class="row-icon">✉</span><span class="row-copy"><strong>Letters / 信件</strong><small>把没说完的话，写给某一个人</small></span><span class="row-count" id="letter-count">0</span><span class="row-arrow">›</span></button>
           <button class="notes-row" data-note-kind="diary"><span class="row-icon">▤</span><span class="row-copy"><strong>Diary / 日记</strong><small>留住今天的情绪和碎片</small></span><span class="row-count" id="diary-count">0</span><span class="row-arrow">›</span></button>
           <button class="notes-row" data-note-kind="collage"><span class="row-icon">▧</span><span class="row-copy"><strong>Card Collage / 字卡拼贴</strong><small>从收藏的句子里重新排列灵感</small></span><span class="row-count" id="collage-count">0</span><span class="row-arrow">›</span></button>
           <button class="notes-row" data-note-kind="all"><span class="row-icon">▦</span><span class="row-copy"><strong>All Fragments / 全部内容</strong><small>浏览与编辑所有已保存的创作</small></span><span class="row-arrow">›</span></button>
           <button class="new-note-button" id="new-note">＋ New Note</button>
           <div class="notes-saved-list" id="notes-saved-list"></div>
+        </div>
+        <div id="notes-music-board" class="notes-music-board" hidden>
+          <div class="music-board-heading"><button type="button" class="small-blue-btn secondary" id="music-board-back">‹ 退出</button><div><strong>Music Box / 音乐盒</strong><small>little songs, little memories</small></div></div>
+          <div class="music-player-framework" aria-label="音乐播放器界面框架">
+            <section class="music-catalog-window" aria-label="音频目录">
+              <div class="music-window-titlebar">
+                <div class="music-window-title">Audio catalog name <span id="music-track-count">(4)</span></div>
+                <div class="music-window-controls" aria-hidden="true"><span>_</span><span>□</span><span>×</span></div>
+              </div>
+              <div class="music-catalog-toolbar">
+                <label class="music-search-box"><span aria-hidden="true">🔍</span><input id="music-track-search" type="search" placeholder="Search audio file name…" aria-label="搜索音频文件名"></label>
+                <input type="file" id="music-audio-import-input" accept="audio/*" hidden>
+                <button type="button" class="music-import-button" id="music-audio-import"><span aria-hidden="true">📥</span> 导入</button>
+              </div>
+              <div class="music-track-list" id="music-track-list">
+                <div class="music-track-row is-active" data-track-title="Midnight Drive" data-track-artist="City Lights">
+                  <button type="button" class="music-track-play" aria-label="播放 Midnight Drive">▶</button>
+                  <div class="music-track-main"><strong>Midnight Drive</strong><div class="music-mini-progress"><span style="width:23%"></span><i style="left:23%"></i></div></div>
+                  <button type="button" class="music-track-save" aria-label="收藏 Midnight Drive">▣</button>
+                </div>
+                <div class="music-track-row" data-track-title="Plastic Love 2004" data-track-artist="Aqua Dreams">
+                  <button type="button" class="music-track-play" aria-label="播放 Plastic Love 2004">▶</button>
+                  <div class="music-track-main"><strong>Plastic Love 2004</strong><div class="music-mini-progress"><span style="width:9%"></span><i style="left:9%"></i></div></div>
+                  <span class="music-row-volume" aria-hidden="true">◖</span><input class="music-row-volume-slider" type="range" min="0" max="100" value="70" aria-label="Plastic Love 2004 音量">
+                  <button type="button" class="music-track-save" aria-label="收藏 Plastic Love 2004">▣</button>
+                </div>
+                <div class="music-track-row" data-track-title="Cyber Nostalgia" data-track-artist="SOHEE Winter">
+                  <button type="button" class="music-track-play" aria-label="播放 Cyber Nostalgia">▶</button>
+                  <div class="music-track-main"><strong>Cyber Nostalgia</strong><div class="music-mini-progress"><span style="width:0%"></span><i style="left:0%"></i></div></div>
+                  <button type="button" class="music-track-save" aria-label="收藏 Cyber Nostalgia">▣</button>
+                </div>
+                <div class="music-track-row" data-track-title="Blue Horizon (蓝调地平线)" data-track-artist="Vintage Wave">
+                  <button type="button" class="music-track-play" aria-label="播放 Blue Horizon">▶</button>
+                  <div class="music-track-main"><strong>Blue Horizon (蓝调地平线)</strong><div class="music-mini-progress"><span style="width:0%"></span><i style="left:0%"></i></div></div>
+                  <button type="button" class="music-track-save" aria-label="收藏 Blue Horizon">▣</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="music-middle-grid" aria-label="播放控制和正在播放">
+              <nav class="music-dock" aria-label="音乐快捷入口">
+                <button type="button" class="music-dock-button"><span class="music-dock-icon home">⌂</span><span>Home</span></button>
+                <button type="button" class="music-dock-button"><i class="music-ribbon ribbon-new">NEW</i><span class="music-dock-icon game">✣</span><span>Game</span></button>
+                <button type="button" class="music-dock-button"><i class="music-ribbon ribbon-free">FREE</i><span class="music-dock-icon video">◉</span><span>Video</span></button>
+                <button type="button" class="music-dock-button"><span class="music-dock-icon audio">◉</span><span>Audio</span></button>
+              </nav>
+              <section class="music-now-playing" aria-label="正在播放">
+                <div class="music-subwindow-titlebar"><strong>Now Playing</strong><div class="music-window-controls" aria-hidden="true"><span>_</span><span>□</span><span>×</span></div></div>
+                <div class="music-now-playing-body">
+                  <div class="music-now-playing-main">
+                    <div class="music-album-art"><img id="music-album-image" src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200&amp;h=200&amp;fit=crop" alt="专辑封面"><span aria-hidden="true">♫</span></div>
+                    <div class="music-now-playing-copy"><strong id="music-current-title">Midnight Drive</strong><span id="music-current-artist">City Lights</span><time id="music-current-time">00:00 / 04:35</time></div>
+                  </div>
+                  <div class="music-main-progress"><span></span><i></i></div>
+                  <div class="music-player-controls">
+                    <button type="button" aria-label="音量">◀))</button><button type="button" aria-label="上一首">|◀</button><button type="button" aria-label="播放或暂停" id="music-main-play">▶</button><button type="button" aria-label="下一首">▶|</button><button type="button" aria-label="播放列表">☷</button>
+                  </div>
+                </div>
+              </section>
+            </section>
+
+            <section class="music-lower-grid" aria-label="字卡机和歌词">
+              <article class="music-pager-window" aria-label="字卡留言面板">
+                <div class="music-pager-titlebar"><span>✉ 🔒 메시지 &gt; SOHEE &gt; 보관 메시지</span></div>
+                <div class="music-recipient-row"><span class="music-recipient-label">👤 ➜ 받는 사람</span><strong>BRIIZE</strong><button type="button" id="music-send-card">✎ 发字卡</button></div>
+                <div class="music-pager-frame"><span class="music-pager-watermark">CYWORLD</span><div class="music-pager-message" id="music-pager-message">안녕! 今日份冬日暖风已投递。<br><br>听说你今天听着《Midnight Drive》在窗前发呆呢？外面冷，记得把围巾系好。字卡柜里存着我们交换过的所有旋律，每一张都在默默发光。☆</div><div class="music-pager-stamp"><span>2026.10.19 MON</span><span>(77 / 400)</span></div></div>
+                <div class="music-pager-actions"><button type="button">✉+ 다음 메시지</button><button type="button">이전 메시지 ✉+</button></div>
+              </article>
+              <article class="music-lyrics-window" aria-label="歌词工作室">
+                <div class="music-lyrics-titlebar"><strong>📜 Lyrics Studio</strong><div class="music-window-controls" aria-hidden="true"><span>_</span><span>×</span></div></div>
+                <div class="music-lyrics-subbar"><span id="music-lyrics-song-name">♪ Midnight Drive</span><span>● 同步待命</span></div>
+                <div class="music-lyrics-scroll" id="music-lyrics-scroll">
+                  <div class="music-lyric-line">♪ [Intro — Nostalgic Synth] ♪</div>
+                  <div class="music-lyric-line">车窗外流过的霓虹光晕</div>
+                  <div class="music-lyric-line">在后视镜里轻轻褪色</div>
+                  <div class="music-lyric-line">收音机里微弱的电流声</div>
+                  <div class="music-lyric-line is-current">★ 无论去向何方，耳机里总有你的声音</div>
+                  <div class="music-lyric-line">♪ [Outro — Fading Echoes] ♪</div>
+                  <div class="music-lyric-line">如果时光能像磁带倒带</div>
+                </div>
+                <div class="music-lyrics-footer"><span>点击任意行跳转播放</span><strong>SYNC 2004</strong></div>
+              </article>
+            </section>
+          </div>
         </div>
         <div id="note-collection" hidden>
           <div class="collection-actions-top">
@@ -186,20 +271,19 @@
           <button class="new-note-button" id="create-collection-note">＋ 写一封信</button>
         </div>
         <div id="note-reader" hidden>
-          <section id="feature-letter-reader" class="feature-letter-reader" hidden aria-label="古早功能机信件阅读器">
+          <section id="feature-letter-reader" class="feature-letter-reader" hidden aria-label="古早功能机记录阅读器">
             <div class="feature-message-status"><strong id="reader-sender">薇薇</strong><time id="reader-timestamp">17-Oct-2026 13:52</time></div>
             <article class="feature-message-body">
               <div class="feature-message-divider"></div>
               <div class="feature-message-subject" id="reader-subject"></div>
               <p class="feature-sms-line"><strong id="reader-prefix">【薇薇】:</strong><span id="reader-sms-content"></span></p>
             </article>
-            <div class="feature-options-menu" id="reader-options-menu" hidden><button type="button" id="reader-menu-edit">编辑信件</button><button type="button" id="reader-menu-delete">删除信件</button></div>
-            <div class="feature-softkeys" role="group" aria-label="信件功能按键"><button type="button" id="reader-options-button">选项</button><button type="button" id="reader-reply-button">回复</button><button type="button" id="reader-return-button">退出</button></div>
-          </section>
-          <section id="diary-reader-legacy" hidden>
-            <button class="text-back" id="reader-back">‹ 返回日记</button>
-            <article class="vintage-paper"><div class="vintage-stamp">♡</div><div class="vintage-kicker" id="reader-kind">A PAGE FROM THE DIARY</div><h2 id="reader-title"></h2><div class="vintage-rule"></div><div class="vintage-content" id="reader-content"></div><div class="vintage-signoff" id="reader-signoff"></div><div class="vintage-date" id="reader-date"></div></article>
-            <div class="editor-actions"><button class="small-blue-btn" id="reader-edit">编辑</button><button class="small-blue-btn secondary" id="reader-delete">删除</button></div>
+            <div class="feature-options-menu" id="reader-options-menu" hidden><button type="button" id="reader-menu-edit">编辑</button><button type="button" id="reader-menu-delete">删除</button></div>
+            <div class="feature-reader-actions" id="reader-actions" role="group" aria-label="记录操作">
+              <button type="button" id="reader-options-button">选项</button>
+              <button type="button" id="reader-reply-button" hidden>回复</button>
+              <button type="button" id="reader-bottom-exit">退出</button>
+            </div>
           </section>
         </div>
         <div id="note-editor" hidden>

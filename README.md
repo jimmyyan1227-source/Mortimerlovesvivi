@@ -116,6 +116,28 @@ retro-otome/
 - 点击按键会把数字或符号显示在键盘上方，并通过浏览器 Web Audio API 合成对应的双音多频（DTMF）按键音。该功能仅在本地播放音效，不会向真实电话线路发送按键信号。
 
 ## Notes V4 update
-- The feature-phone letter reader's right softkey is now labeled **退出** and exits directly to the Notes home screen.
+- The feature-phone reader keeps its original **选项 / 回复 / 返回** softkey row; **返回** goes back to the letter list. A separate bottom row provides **编辑** (opens the current letter editor) and **退出** (returns to the Notes home screen). The reader uses a flex-column layout so both control rows stay visible.
 - The personal letter editor now shows **这封信写给** with only **莫蒂** as the recipient. New user-authored letters are saved as written by 薇薇 and addressed to 莫蒂.
 - The collected-card picker is hidden while writing letters or diary entries; it remains available for Card Collage only.
+
+
+## Notes reader update — V6
+
+- Letter and diary records stay in their dedicated collections; the Notes home list beneath `＋ New Note` only shows collage entries rather than duplicating letters/diaries. `All Fragments` remains the deliberate all-records view.
+- Letters and diaries share the clean white classic feature-phone reader. The displayed prefix distinguishes a letter (`【薇薇】: ...`) from a diary (`【薇薇的日记】 ...`).
+- The reader has a single bottom action bar: `选项` and `退出`; `回复` appears only for a letter authored by Mortimer. `选项` opens `编辑` / `删除`.
+
+## Notes automatic letter reply — V7
+
+- Saving a new letter authored by 薇薇 records an internal reply deadline once, between one minute and twelve hours later. The deadline is not rendered anywhere in the app and is not reset when the original letter is edited.
+- When the deadline is reached while the page is open, a scheduled check adds one reply from 莫蒂 to the letter collection. If the page was closed, overdue replies are processed at the next page load or when the page returns to the foreground.
+- Each reply uses a random 1–12 enabled cards from the Me custom card library, sampled without repeating a card within one reply and concatenated in their selected order. It does not call an AI service or invent extra text.
+- Each original letter is marked internally after a reply is created, and the reply stores a link to its original letter, preventing duplicate replies on refresh.
+- If there are no eligible enabled cards when the deadline arrives, the reply remains pending and is retried when the app checks again until cards are available.
+- This is client-side scheduling in localStorage, so reply records are local to that browser/device. A browser can throttle timers in a background tab; returning to the page triggers an immediate catch-up check.
+
+## Music Box framework — V9
+- Replaced the empty Music Box placeholder with the supplied three-tier layout: full-width audio catalog; left shortcut dock beside Now Playing; lower two-column Korean-style message card and Lyrics Studio.
+- Reworked the visual palette into coordinated frost blue, white, and pale periwinkle. The Now Playing and Lyrics Studio title bars are no longer black panels.
+- Added four sample track rows, search/import controls, progress lines, volume slider styling, player controls, album-art frame, framed message card, and highlighted lyric line as UI scaffolding.
+- This version focuses on the visual framework/layout. Audio import, actual playback/playlist actions, card sending, and lyric-time synchronization are not wired up yet; these are intended for the next functional pass.
