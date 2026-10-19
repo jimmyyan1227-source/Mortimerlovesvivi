@@ -29,7 +29,7 @@
     profileName: "heartYEAH:)", signature: "A leaf that remains evergreen", profileAvatar: "", customContacts: [],
     // The card library intentionally starts empty: only user-created/imported cards can reply.
     customCards: [], cardGroups: [], collected: [], messages: clone(DEFAULT_MESSAGES), previews: {}, notes: [],
-    savedItems: [], pinnedContacts: [], hiddenContacts: [], deletedContacts: [], chatPreferences: {},
+    savedItems: [], pinnedContacts: [], hiddenContacts: [], deletedContacts: [], chatPreferences: {}, customStickers: [],
     anniversaries: [
       { id: "anniv-meet", title: "相识纪念日", date: "2026-05-14", note: "The day our story began." },
       { id: "anniv-first", title: "第一次约会", date: "2026-06-01", note: "A tiny date worth remembering." }
@@ -61,6 +61,7 @@
         hiddenContacts: Array.isArray(parsed.hiddenContacts) ? parsed.hiddenContacts : [],
         deletedContacts: Array.isArray(parsed.deletedContacts) ? parsed.deletedContacts : [],
         chatPreferences: parsed.chatPreferences && typeof parsed.chatPreferences === "object" ? parsed.chatPreferences : {},
+        customStickers: Array.isArray(parsed.customStickers) ? [...new Set(parsed.customStickers.map(sticker => String(sticker || "").trim()).filter(Boolean))].slice(0, 200) : [],
         anniversaries: Array.isArray(parsed.anniversaries) ? parsed.anniversaries : [],
         collected: Array.isArray(parsed.collected) ? parsed.collected : [],
         customCards, cardGroups
@@ -75,6 +76,8 @@
   let currentFilter = "all";
   let editingNoteId = null;
   let currentNoteKind = "all";
+  let selectedNoteIds = new Set();
+  let readingNoteId = null;
   const now = new Date();
   let calendarYear = now.getFullYear();
   let calendarMonth = now.getMonth();
@@ -95,6 +98,16 @@
   function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (error) { console.warn("Local storage could not be written.", error); } }
   function nowTime() { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
   function dateLabel(dateStr) { const d = new Date(`${dateStr}T12:00:00`); return Number.isNaN(d.getTime()) ? dateStr : `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`; }
+  function featurePhoneTimestamp(note) {
+    let date = note?.createdAt || note?.updatedAt;
+    date = date ? new Date(date) : new Date(`${note?.date || todayKey()}T12:00:00`);
+    if (Number.isNaN(date.getTime())) date = new Date();
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const day = String(date.getDate()).padStart(2, "0");
+    const hour = String(date.getHours()).padStart(2, "0");
+    const minute = String(date.getMinutes()).padStart(2, "0");
+    return `${day}-${months[date.getMonth()]}-${date.getFullYear()} ${hour}:${minute}`;
+  }
   function currentContact() { return CONTACTS.find(c => c.id === activeContactId) || CONTACTS[0]; }
   function allCards() {
     const enabledGroups = new Set(state.cardGroups.filter(group => group.enabled).map(group => group.id));
@@ -106,7 +119,11 @@
     ttsEnabled: false, minimaxApiKey: "", minimaxGroupId: "", ttsModel: "speech-2.8-hd", voiceId: "", ttsLanguage: "原文", ttsSpeed: 1, ttsGender: "男", ttsEmotion: "温柔体贴", ttsCustomEmotion: "",
     autoTranslateCards: false, showTranslatedText: true
   });
-  const RANDOM_STICKERS = ["ヽ(｡ゝω・｡)ﾉ", "(｡♥‿♥｡)", "( ˘ ³˘)♥", "♡", "(｡•̀ᴗ-)✧", "(づ｡◕‿‿◕｡)づ", "✧･ﾟ", "(¬‿¬)"];
+  const STICKER_INSERTION_CHANCE = 0.2;
+  const BUILT_IN_STICKERS = [
+    "(^３^)", "ヽ(｡ゝω・｡)ﾉ", "((ﾐ´ω`ﾐ))", "(=^ω^=)", "(*-ω-)", "↖(^ω^)↗",
+    "Y(^_^)Y", "(｡･ω･｡)", "Σ(・ω・`|||)", "#^_^#", ">_<¦¦¦", "^ω^"
+  ];
   function getChatPreferences(contactId = activeContactId) {
     const stored = state.chatPreferences?.[contactId] || {};
     return { ...DEFAULT_CHAT_PREFERENCES, ...stored };
@@ -159,18 +176,20 @@
     $("#page-saved").hidden = activeTab !== "saved";
     $("#page-me").hidden = activeTab !== "me";
     $$(".tab-item").forEach(button => button.classList.toggle("active", button.dataset.tab === activeTab));
-    $("#back-btn").hidden = !(inChat || (activeTab === "notes" && !$("#note-editor").hidden));
+    $("#back-btn").hidden = !(inChat || (activeTab === "notes" && (!$("#note-editor").hidden || !$("#note-collection").hidden || !$("#note-reader").hidden)));
+    const readingNote = state.notes.find(note => note.id === readingNoteId);
+    $(".phone").classList.toggle("feature-reader-active", activeTab === "notes" && !$("#note-reader").hidden && readingNote?.type === "letter");
     $("#top-action").hidden = false;
     $(".tab-bar").hidden = activeTab === "message" && inChat;
     $("#add-contact-btn").hidden = !(activeTab === "message" && !inChat);
     $(".phone").classList.toggle("chat-immersive", activeTab === "message" && inChat);
-    const titles = { message: inChat ? currentContact().name : "Message", notes: $("#note-editor").hidden ? "Notes" : "Note Editor", saved: "Saved", me: "Me" };
+    const titles = { message: inChat ? currentContact().name : "Message", notes: !$("#note-reader").hidden ? "Letter" : !$("#note-editor").hidden ? "Note Editor" : !$("#note-collection").hidden ? (currentNoteKind === "letter" ? "Letters" : "Diary") : "Notes", saved: "Saved", me: "Me" };
     $("#top-title").textContent = titles[activeTab];
-    $("#top-action").textContent = activeTab === "message" && inChat ? "Edit" : activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : "＋ New") : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
+    $("#top-action").textContent = activeTab === "message" && inChat ? "Edit" : activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : (!$("#note-reader").hidden ? "Edit" : "＋ New")) : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
   }
   function switchTab(tab) {
     activeTab = tab; inChat = false; endSelectionMode();
-    if (tab === "notes") { $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; }
+    if (tab === "notes") { $("#notes-home").hidden = false; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = true; editingNoteId = null; readingNoteId = null; selectedNoteIds.clear(); }
     renderLayout();
     if (tab === "message") renderConversations();
     if (tab === "notes") renderNotes();
@@ -271,11 +290,19 @@
       detail.textContent = message.callStatus === "missed"
         ? (message.contactName || "对方")
         : `${message.callType === "facetime" ? "视频通话时长" : "通话时长"} ${formatCallTime(message.durationSeconds || 0)}`;
-      const stamp = document.createElement("time"); stamp.className = "call-log-timestamp";
-      const when = new Date(message.callEndedAt || message.createdAt || Date.now());
-      stamp.dateTime = when.toISOString();
-      stamp.textContent = `${when.getFullYear()}/${String(when.getMonth()+1).padStart(2,"0")}/${String(when.getDate()).padStart(2,"0")}  ${String(when.getHours()).padStart(2,"0")}:${String(when.getMinutes()).padStart(2,"0")}`;
-      copy.append(title, detail, stamp); card.append(icon, copy); group.append(card); container.append(group); return;
+      // Call logs are ordinary message items: they support long-press/context-menu
+      // deletion and the same multi-select workflow as other messages.
+      copy.append(title, detail); card.append(icon, copy); group.append(card);
+      if (selectionMode) {
+        group.classList.add("selecting");
+        if (selectedMessageIds.has(message.id)) group.classList.add("selected-message");
+        const check = document.createElement("button"); check.type = "button"; check.className = "message-select-check";
+        check.setAttribute("aria-label", "选择这条消息"); check.textContent = selectedMessageIds.has(message.id) ? "✓" : "";
+        check.addEventListener("click", event => { event.stopPropagation(); toggleSelectedMessage(message.id); });
+        group.append(check);
+      }
+      attachMessageGesture(group, message.id);
+      container.append(group); return;
     }
     if (selectionMode) {
       group.classList.add("selecting");
@@ -602,6 +629,55 @@
     }
     throw new Error("MiniMax 返回的音频不是预期的 Hex 数据，请检查接口输出格式。");
   }
+  function renderCustomStickers() {
+    const container = $("#sticker-grid");
+    if (!container) return;
+    container.querySelectorAll("[data-custom-sticker-chip]").forEach(node => node.remove());
+    const stickers = Array.isArray(state.customStickers) ? state.customStickers : [];
+    stickers.forEach((sticker, index) => {
+      const item = document.createElement("div");
+      item.className = "custom-sticker-chip";
+      item.dataset.customStickerChip = "true";
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "custom-sticker-send";
+      send.dataset.customStickerSend = String(index);
+      send.textContent = sticker;
+      send.title = "点击发送这个颜文字";
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "custom-sticker-remove";
+      remove.dataset.customStickerRemove = String(index);
+      remove.textContent = "×";
+      remove.title = "从 Quick picks 删除这个颜文字";
+      remove.setAttribute("aria-label", `删除颜文字 ${sticker}`);
+      item.append(send, remove);
+      container.append(item);
+    });
+  }
+
+  function addCustomSticker(value) {
+    const sticker = String(value || "").trim();
+    if (!sticker) return false;
+    if (Array.from(sticker).length > 100) {
+      void showModal("颜文字太长啦", "单个颜文字最多 100 个字符，请删减后再添加。", "✧");
+      return false;
+    }
+    if (!Array.isArray(state.customStickers)) state.customStickers = [];
+    if (state.customStickers.some(item => String(item).toLocaleLowerCase() === sticker.toLocaleLowerCase())) {
+      void showModal("已经添加过啦", "这个颜文字已经在「我的颜文字」里了。", "♡");
+      return false;
+    }
+    if (state.customStickers.length >= 200) {
+      void showModal("颜文字收藏已满", "最多可以保存 200 个自定义颜文字。", "!");
+      return false;
+    }
+    state.customStickers.push(sticker);
+    saveState();
+    renderCustomStickers();
+    return true;
+  }
+
   function receiveCard(contactId, preferences = getChatPreferences(contactId)) {
     hideThinkingIndicator();
     const pool = allCards();
@@ -613,16 +689,45 @@
     }
     // Only an actual reply marks the player's pending messages as read.
     markMessagesRead(contactId, "sent");
-    const requested = preferences.multiCardsEnabled ? Math.max(1, Math.min(5, Number(preferences.cardCount) || 1)) : 1;
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const picked = shuffled.slice(0, Math.min(requested, shuffled.length));
-    let fragments = picked.map(card => {
+    const maxCards = preferences.multiCardsEnabled ? Math.max(1, Math.min(5, Number(preferences.cardCount) || 1)) : 1;
+    const availableLimit = Math.min(maxCards, pool.length);
+    // Enabling multi-card mode sets an upper limit, not a fixed number for every reply.
+    const requested = preferences.multiCardsEnabled ? 1 + Math.floor(Math.random() * availableLimit) : 1;
+    const shuffled = [...pool];
+    // Fisher-Yates shuffle avoids the bias of sorting with a random comparator.
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const picked = shuffled.slice(0, requested);
+    const fragments = picked.map(card => {
       let text = card.text;
       if (preferences.multiCardsEnabled && preferences.autoPunctuation && text && !/[。！？.!?…]$/.test(text)) text += "。";
       return text;
     });
-    let replyText = fragments.join(preferences.multiCardsEnabled ? "\n" : "");
-    if (preferences.stickerEnabled) replyText += `${replyText ? " " : ""}${RANDOM_STICKERS[Math.floor(Math.random() * RANDOM_STICKERS.length)]}`;
+    // Optional kaomoji insertion: at most one per reply, 20% chance. Only use safe boundaries:
+    // before the whole paragraph, after a complete card, or after the whole paragraph — never inside card text.
+    const customStickers = Array.isArray(state.customStickers)
+      ? state.customStickers.map(sticker => String(sticker || "").trim()).filter(Boolean)
+      : [];
+    const availableStickers = [...new Set([...BUILT_IN_STICKERS, ...customStickers])];
+    let stickerAtEnd = "";
+    let stickerAtStart = "";
+    if (preferences.stickerEnabled && availableStickers.length && fragments.length && Math.random() < STICKER_INSERTION_CHANCE) {
+      const sticker = availableStickers[Math.floor(Math.random() * availableStickers.length)];
+      // Valid slots: paragraph start, after any complete card, and paragraph end. No character-level insertion.
+      const slot = Math.floor(Math.random() * (fragments.length + 2));
+      if (slot === 0) {
+        stickerAtStart = `${sticker} `;
+      } else if (slot === fragments.length + 1) {
+        stickerAtEnd = ` ${sticker}`;
+      } else {
+        const cardIndex = slot - 1;
+        fragments[cardIndex] = `${fragments[cardIndex]} ${sticker}`;
+      }
+    }
+    // Keep composed cards in one continuous message; don't insert line breaks between cards.
+    const replyText = `${stickerAtStart}${fragments.join("")}${stickerAtEnd}`;
     const useVoice = preferences.ttsEnabled && Math.random() < 0.4;
     const message = { id: uid(), text: replyText, type: "received", status: "Delivered", time: nowTime(), cardIds: picked.map(card => card.id), ...(useVoice ? { kind: "voice", duration: Math.max(2, Math.min(30, Math.ceil(replyText.length / 4))), contactId } : {}) };
     if (!state.messages[contactId]) state.messages[contactId] = [];
@@ -759,12 +864,74 @@
     });
   }
   function typeLabel(type) { return ({ letter: "Letter", diary: "Diary", collage: "Card Collage" })[type] || "Note"; }
+  function ownerLabel(note) { return note.owner === "mortimer" ? "莫蒂" : "薇薇"; }
+  function openNoteCollection(type) {
+    currentNoteKind = type; selectedNoteIds.clear();
+    $("#notes-home").hidden = true; $("#note-collection").hidden = false; $("#note-reader").hidden = true; $("#note-editor").hidden = true;
+    $("#create-collection-note").textContent = type === "letter" ? "＋ 写一封信" : "＋ 写一篇日记";
+    renderNoteCollection(); renderLayout();
+  }
+  function renderNoteCollection() {
+    const root = $("#note-collection-groups"); root.replaceChildren();
+    const type = currentNoteKind;
+    [{owner:"vivi",label:type === "letter" ? "薇薇の信件" : "薇薇の日记"},{owner:"mortimer",label:type === "letter" ? "莫蒂の信件" : "莫蒂の日记"}].forEach(group => {
+      const section = document.createElement("section"); section.className = "note-owner-group";
+      const heading = document.createElement("div"); heading.className = "note-owner-heading"; const title = document.createElement("strong"); title.textContent = group.label; const count = document.createElement("small");
+      const items = state.notes.filter(n => n.type === type && (n.owner || "vivi") === group.owner); count.textContent = `${items.length} 篇`; heading.append(title,count); section.append(heading);
+      if (!items.length) { const empty = document.createElement("div"); empty.className = "empty-message owner-empty"; empty.textContent = "暂时还没有内容，等一封信或一页日记被写下。"; section.append(empty); }
+      items.forEach(note => {
+        const row = document.createElement("div"); row.className = "collection-note-row";
+        const check = document.createElement("input"); check.type = "checkbox"; check.checked = selectedNoteIds.has(note.id); check.setAttribute("aria-label", `选择${note.title || typeLabel(type)}`); check.addEventListener("change", () => { check.checked ? selectedNoteIds.add(note.id) : selectedNoteIds.delete(note.id); updateNoteBatchButton(); });
+        const open = document.createElement("button"); open.type = "button"; open.className = "collection-note-open"; const title = document.createElement("strong"); title.textContent = note.title || (type === "letter" ? "无题信件" : "无题日记"); const preview = document.createElement("small"); preview.textContent = `${dateLabel(note.date)}　${(note.content || "").replace(/\s+/g," ").slice(0,44)}`; const arrow = document.createElement("span"); arrow.className="row-arrow"; arrow.textContent="›"; open.append(title,preview); open.addEventListener("click",()=>openNoteReader(note.id)); row.append(check,open,arrow); section.append(row);
+      }); root.append(section);
+    }); updateNoteBatchButton();
+  }
+  function updateNoteBatchButton() { const b = $("#batch-delete-notes"); b.disabled = selectedNoteIds.size === 0; b.textContent = `删除所选 (${selectedNoteIds.size})`; }
+  function openNoteReader(id) {
+    const note = state.notes.find(n => n.id === id); if (!note) return; readingNoteId = id;
+    $("#note-collection").hidden = true; $("#note-reader").hidden = false; $("#note-editor").hidden = true;
+    const isLetter = note.type === "letter";
+    $("#feature-letter-reader").hidden = !isLetter;
+    $("#diary-reader-legacy").hidden = isLetter;
+    $("#reader-options-menu").hidden = true;
+    if (isLetter) {
+      const sender = ownerLabel(note);
+      $("#reader-sender").textContent = sender;
+      $("#reader-timestamp").textContent = featurePhoneTimestamp(note);
+      $("#reader-subject").textContent = note.title || "无题信件";
+      $("#reader-prefix").textContent = `【${sender}】: `;
+      $("#reader-sms-content").textContent = note.content || "";
+    } else {
+      $("#reader-kind").textContent = "A PAGE FROM THE DIARY";
+      $("#reader-title").textContent = note.title || "无题日记";
+      $("#reader-content").textContent = note.content || "";
+      $("#reader-signoff").textContent = `—— ${ownerLabel(note)}`;
+      $("#reader-date").textContent = dateLabel(note.date);
+    }
+    renderLayout();
+  }
+  async function deleteReadingNote() {
+    const note = state.notes.find(n => n.id === readingNoteId); if (!note) return;
+    if (await showModal("删除这份记录？", note.title || typeLabel(note.type), "!", { confirm: true, okText: "删除" })) {
+      state.notes = state.notes.filter(n => n.id !== readingNoteId); saveState(); readingNoteId = null;
+      openNoteCollection(currentNoteKind); renderNotes();
+    }
+  }
+  function replyToReadingNote() {
+    const note = state.notes.find(n => n.id === readingNoteId); if (!note || note.type !== "letter") return;
+    openNoteEditor("letter");
+    $("#note-owner").value = (note.owner || "vivi") === "mortimer" ? "vivi" : "mortimer";
+    const subject = note.title || "无题信件";
+    $("#note-title").value = (`Re: ${subject}`).slice(0, 80);
+    $("#note-content").value = "";
+    $("#note-content").focus();
+  }
   function openNoteEditor(type = "diary", id = null) {
     currentNoteKind = type; editingNoteId = id;
     const note = id ? state.notes.find(item => item.id === id) : null;
-    $("#notes-home").hidden = true; $("#note-editor").hidden = false;
+    $("#notes-home").hidden = true; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = false;
     $("#note-title").value = note?.title || ({ letter: "A letter to you", diary: "Today's fragments", collage: "Collected words" })[type] || "Untitled";
-    $("#note-content").value = note?.content || (type === "collage" ? state.collected.slice(0, 4).join("\n") : "");
+    $("#note-content").value = note?.content || (type === "collage" ? state.collected.slice(0, 4).join("\n") : ""); $("#note-owner").value = note?.owner || "vivi";
     $("#delete-note").hidden = !note; renderNoteCardTags(); renderLayout();
   }
   function renderNoteCardTags() {
@@ -780,10 +947,10 @@
     const content = $("#note-content").value.trim();
     if (!content) { showModal("Nothing to save", "先写下一点内容，再把它留存起来吧。", "✉"); return; }
     let note;
-    if (editingNoteId) { note = state.notes.find(item => item.id === editingNoteId); if (note) Object.assign(note, { title, content, type: currentNoteKind, date: todayKey(), updatedAt: Date.now() }); }
-    else { note = { id: uid(), type: currentNoteKind, title, content, date: todayKey(), createdAt: Date.now() }; state.notes.unshift(note); }
+    if (editingNoteId) { note = state.notes.find(item => item.id === editingNoteId); if (note) Object.assign(note, { title, content, type: currentNoteKind, owner: $("#note-owner").value, date: todayKey(), updatedAt: Date.now() }); }
+    else { note = { id: uid(), type: currentNoteKind, owner: $("#note-owner").value, title, content, date: todayKey(), createdAt: Date.now() }; state.notes.unshift(note); }
     saveState();
-    $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; currentNoteKind = "all"; renderLayout(); renderNotes(); renderCalendar(); renderSavedDay();
+    editingNoteId = null; renderCalendar(); renderSavedDay(); if (["letter","diary"].includes(currentNoteKind)) { openNoteCollection(currentNoteKind); } else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; renderLayout(); renderNotes(); }
     showModal("Saved", "这段内容已保存到 Notes。Saved 只展示你在聊天中手动收藏的消息。", "✓");
   }
 
@@ -1188,12 +1355,12 @@
     const host = $("#modal-extra");
     const comboSection = preferenceSection(host, "01 · 回复内容生成规则", "RESPONSE COMPOSITION");
     const comboOptions = document.createElement("div"); comboOptions.className = "pref-nested";
-    preferenceToggle(comboSection, "拼字卡功能 / Multi-Cards Combo", "开启后，一次回复可组合多张已启用字卡。", prefs.multiCardsEnabled, checked => { prefs.multiCardsEnabled = checked; comboOptions.classList.toggle("is-disabled", !checked); });
-    preferenceRange(comboOptions, "字卡数量", "每次回复使用的字卡张数。可用字卡不足时会自动取可用数量。", 1, 5, 1, prefs.cardCount, value => { prefs.cardCount = value; }, value => `${value} 张`);
+    preferenceToggle(comboSection, "拼字卡功能 / Multi-Cards Combo", "开启后，每次回复会随机抽取 1 张到下方设定上限的字卡，组成同一条回复。", prefs.multiCardsEnabled, checked => { prefs.multiCardsEnabled = checked; comboOptions.classList.toggle("is-disabled", !checked); });
+    preferenceRange(comboOptions, "字卡数量上限", "每次随机抽取 1 张至此上限，不会每次固定抽满；可用字卡不足时自动取可用数量。", 1, 5, 1, prefs.cardCount, value => { prefs.cardCount = value; }, value => `${value} 张`);
     preferenceToggle(comboOptions, "标点自动补充", "拼字卡模式下，自动为每条字卡补上句号“。”。", prefs.autoPunctuation, checked => { prefs.autoPunctuation = checked; });
     comboOptions.classList.toggle("is-disabled", !prefs.multiCardsEnabled);
     comboSection.append(comboOptions);
-    preferenceToggle(comboSection, "附带颜文字 / Sticker in Bubble", "角色回复时，在同一个气泡末尾随机附上颜文字。", prefs.stickerEnabled, checked => { prefs.stickerEnabled = checked; });
+    preferenceToggle(comboSection, "附带颜文字 / Sticker in Bubble", "每条回复有 20% 概率附加一个颜文字；只会放在整段开头、整段结尾或完整字卡后面，不会插进句子中间。自带颜文字和「我的颜文字」都可被随机抽取。", prefs.stickerEnabled, checked => { prefs.stickerEnabled = checked; });
 
     const delaySection = preferenceSection(host, "02 · 拟人化回复与状态联动", "HUMAN-LIKE RESPONSE BEHAVIOR");
     preferenceRange(delaySection, "思考延迟 · 最短时间", "收到消息后至少等待多久再回复。", 0, 10, 0.5, prefs.delayMin, (value, input, output) => {
@@ -1264,7 +1431,7 @@
   function updateClock() {}
 
   $$(".tab-item").forEach(button => button.addEventListener("click", () => switchTab(button.dataset.tab)));
-  $("#back-btn").addEventListener("click", () => { if (inChat) { inChat = false; renderLayout(); renderConversations(); } else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; renderLayout(); renderNotes(); } });
+  $("#back-btn").addEventListener("click", () => { if (inChat) { inChat = false; renderLayout(); renderConversations(); } else if (activeTab === "notes") { if (!$("#note-editor").hidden) { if (["letter","diary"].includes(currentNoteKind)) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden=false; $("#note-editor").hidden=true; renderNotes(); renderLayout(); } } else if (!$("#note-reader").hidden) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden = false; $("#note-collection").hidden=true; $("#note-reader").hidden=true; $("#note-editor").hidden = true; selectedNoteIds.clear(); renderLayout(); renderNotes(); } } });
   $("#composer").addEventListener("submit", event => { event.preventDefault(); sendMessage($("#message-input").value); });
   $("#cancel-selection").addEventListener("click", () => { endSelectionMode(); renderMessages(); });
   $("#delete-selected").addEventListener("click", deleteSelectedMessages);
@@ -1273,6 +1440,31 @@
   $("#sticker-btn").addEventListener("click", () => toggleComposerPanel("stickers"));
   $("#close-extension").addEventListener("click", () => { $("#extension-panel").hidden = true; });
   $("#close-stickers").addEventListener("click", () => { $("#sticker-tray").hidden = true; });
+  $("#custom-sticker-form").addEventListener("submit", event => {
+    event.preventDefault();
+    const input = $("#custom-sticker-input");
+    if (addCustomSticker(input.value)) input.value = "";
+  });
+  $("#sticker-grid").addEventListener("click", event => {
+    const removeButton = event.target.closest("[data-custom-sticker-remove]");
+    if (removeButton) {
+      const index = Number(removeButton.dataset.customStickerRemove);
+      if (Number.isInteger(index) && index >= 0 && index < (state.customStickers || []).length) {
+        state.customStickers.splice(index, 1);
+        saveState();
+        renderCustomStickers();
+      }
+      return;
+    }
+    const sendButton = event.target.closest("[data-custom-sticker-send]");
+    if (sendButton) {
+      const sticker = state.customStickers?.[Number(sendButton.dataset.customStickerSend)];
+      if (sticker) {
+        $("#sticker-tray").hidden = true;
+        sendSpecialMessage({ kind: "sticker", text: sticker }, true);
+      }
+    }
+  });
   $$("[data-extension]").forEach(button => button.addEventListener("click", () => composeExtension(button.dataset.extension)));
   $$("[data-sticker]").forEach(button => button.addEventListener("click", () => { const sticker = button.dataset.sticker; $("#sticker-tray").hidden = true; sendSpecialMessage({ kind: "sticker", text: sticker }, true); }));
   $("#camera-btn").addEventListener("click", () => showModal("Camera", "这是一个复古界面 Demo，目前不会调用设备相机或上传真实照片。", "▣"));
@@ -1377,11 +1569,14 @@
     status.className = "ios6-status-connecting";
     status.innerHTML = '<span class="ios6-pulse-ring" aria-hidden="true"></span>正在呼叫...';
     ["#tool-mute", "#tool-keypad", "#tool-speaker"].forEach(selector => { const el = $(selector); el.classList.remove("active"); el.setAttribute("aria-pressed", "false"); });
+    panel.style.display = "";
     panel.classList.remove("hidden", "is-minimized"); panel.setAttribute("aria-hidden", "false"); panel.setAttribute("aria-modal", "true");
     const miniIcon = $("#call-minimized-icon");
     if (miniIcon) { miniIcon.hidden = true; miniIcon.classList.remove("is-visible"); }
     callConnectTimeout = setTimeout(() => {
-      if (panel.classList.contains("hidden")) return;
+      // The Call screen may be hidden while switching to FaceTime; the call
+      // session itself is still active and must finish connecting normally.
+      if (!activeCallContact) return;
       callConnected = true; callStartedAt = Date.now();
       status.className = "ios6-status-timer"; status.textContent = "00:00";
       callTickInterval = setInterval(() => {
@@ -1403,6 +1598,7 @@
   function restoreCall() {
     const panel = $("#call-screen");
     if (!activeCallContact || !panel) return;
+    panel.style.display = "";
     panel.classList.remove("is-minimized", "hidden");
     panel.setAttribute("aria-hidden", "false");
     panel.setAttribute("aria-modal", "true");
@@ -1417,15 +1613,19 @@
     callConnectTimeout = null; callTickInterval = null; callConnected = false; callStartedAt = 0;
     const panel = $("#call-screen");
     setDialpadOpen(false);
-    if (panel) { panel.classList.remove("is-minimized"); panel.classList.add("hidden"); panel.setAttribute("aria-hidden", "true"); panel.setAttribute("aria-modal", "false"); }
+    if (panel) { panel.style.display = ""; panel.classList.remove("is-minimized"); panel.classList.add("hidden"); panel.setAttribute("aria-hidden", "true"); panel.setAttribute("aria-modal", "false"); }
     const miniIcon = $("#call-minimized-icon");
     if (miniIcon) { miniIcon.classList.remove("is-visible"); miniIcon.hidden = true; }
     if (hadActiveCall) saveCallLog(wasConnected ? "ended" : "missed", duration);
     activeCallContact = null; activeCallStartedAt = 0;
   }
-  let faceTimeTickInterval = null, faceTimeStartedAt = 0, faceTimeReturnToCall = false, faceTimeObjectUrl = null, faceTimeIsMinimized = false, faceTimeContact = null;
+  const FACETIME_PHOTO_KEY = "retroOtome_facetime_persistent_photo_v1";
+  let faceTimeTickInterval = null, faceTimeStartedAt = 0, faceTimeSessionStartedAt = 0, faceTimeReturnToCall = false, faceTimeObjectUrl = null, faceTimeIsMinimized = false, faceTimeContact = null;
+  function getSavedFaceTimePhoto() { try { return localStorage.getItem(FACETIME_PHOTO_KEY) || ""; } catch { return ""; } }
   function updateFaceTimeTimer() {
     if (!faceTimeStartedAt) return;
+    // FaceTime takes over the active Call session's timestamp when switched
+    // from Call, so the visible timer continues without keeping Call alive.
     const timer = $("#facetime-timer");
     if (timer) timer.textContent = formatCallTime(Math.floor((Date.now() - faceTimeStartedAt) / 1000));
   }
@@ -1436,19 +1636,44 @@
     const contact = (contactArg && typeof contactArg === "object") ? contactArg : currentContact();
     clearInterval(faceTimeTickInterval);
     faceTimeTickInterval = null;
-    faceTimeStartedAt = Date.now();
+    const takingOverCall = Boolean(fromCall && activeCallContact);
+    const callTimestamp = takingOverCall && callConnected && callStartedAt ? callStartedAt : 0;
+    const now = Date.now();
+    // Call is silently ended as a UI/session, but its elapsed time is carried
+    // into FaceTime. No Call-ended log is created during this transition.
+    faceTimeReturnToCall = false;
+    faceTimeSessionStartedAt = callTimestamp || now;
+    faceTimeStartedAt = faceTimeSessionStartedAt;
     faceTimeContact = contact;
     faceTimeIsMinimized = false;
-    faceTimeReturnToCall = Boolean(fromCall && activeCallContact);
-    if (fromCall) setDialpadOpen(false);
+    if (takingOverCall) {
+      setDialpadOpen(false);
+      clearTimeout(callConnectTimeout);
+      clearInterval(callTickInterval);
+      callConnectTimeout = null; callTickInterval = null;
+      callConnected = false; callStartedAt = 0;
+      activeCallContact = null; activeCallStartedAt = 0;
+      const callPanel = $("#call-screen");
+      if (callPanel) {
+        callPanel.classList.remove("is-minimized");
+        callPanel.classList.add("hidden");
+        callPanel.setAttribute("aria-hidden", "true"); callPanel.setAttribute("aria-modal", "false");
+        callPanel.style.display = "none";
+      }
+      const callMini = $("#call-minimized-icon");
+      if (callMini) { callMini.classList.remove("is-visible"); callMini.hidden = true; }
+    }
     $("#facetime-contact-name").textContent = contact.name || "联系人";
     $("#facetime-status").textContent = "视频展示已连接";
-    $("#facetime-timer").textContent = "00:00";
+    $("#facetime-timer").textContent = formatCallTime(Math.floor((Date.now() - faceTimeStartedAt) / 1000));
     const portrait = $("#facetime-portrait");
     portrait.classList.remove("is-mirrored");
     portrait.alt = `${contact.name || "联系人"}的展示照片`;
     if (faceTimeObjectUrl) { URL.revokeObjectURL(faceTimeObjectUrl); faceTimeObjectUrl = null; }
-    portrait.src = contact.avatar || currentContact().avatar || "";
+    // A user-uploaded FaceTime photo is a persistent display preference, not a
+    // chat message. Keep it until another photo is selected, including reloads.
+    const savedPhoto = getSavedFaceTimePhoto();
+    portrait.src = savedPhoto || contact.avatar || currentContact().avatar || "";
     $("#facetime-empty").hidden = Boolean(portrait.src);
     $("#facetime-mute").setAttribute("aria-pressed", "false");
     $("#facetime-flip").setAttribute("aria-pressed", "false");
@@ -1458,6 +1683,7 @@
     panel.setAttribute("aria-hidden", "false");
     panel.setAttribute("aria-modal", "true");
     requestAnimationFrame(() => panel.classList.add("is-visible"));
+    updateFaceTimeTimer();
     faceTimeTickInterval = setInterval(updateFaceTimeTimer, 500);
   }
   function minimizeFaceTime() {
@@ -1490,12 +1716,15 @@
     if (!panel || (panel.classList.contains("hidden") && !faceTimeIsMinimized)) return;
     const endedAt = Date.now();
     const endedContact = faceTimeContact;
-    const startedAt = faceTimeStartedAt;
-    const duration = startedAt ? Math.floor((endedAt - startedAt) / 1000) : 0;
-    if (endedContact && startedAt) saveCallLog("ended", duration, endedContact, "facetime", startedAt);
+    // If FaceTime replaced Call, faceTimeStartedAt is the original connected
+    // Call timestamp, so the final record reflects the entire continuous call.
+    const logStartedAt = faceTimeStartedAt || faceTimeSessionStartedAt;
+    const duration = logStartedAt ? Math.floor((endedAt - logStartedAt) / 1000) : 0;
+    if (endedContact && logStartedAt) saveCallLog("ended", duration, endedContact, "facetime", logStartedAt);
     clearInterval(faceTimeTickInterval);
     faceTimeTickInterval = null;
     faceTimeStartedAt = 0;
+    faceTimeSessionStartedAt = 0;
     faceTimeIsMinimized = false;
     panel.classList.remove("is-visible");
     panel.setAttribute("aria-hidden", "true");
@@ -1504,7 +1733,6 @@
     mini.classList.remove("is-visible"); mini.hidden = true;
     setTimeout(() => {
       panel.classList.add("hidden");
-      if (faceTimeReturnToCall && activeCallContact) restoreCall();
       faceTimeReturnToCall = false;
       faceTimeContact = null;
     }, 280);
@@ -1610,12 +1838,19 @@
     const file = event.target.files && event.target.files[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) { showModal("图片格式不支持", "请选择 JPG、PNG、WebP 等图片文件。", "!"); event.target.value = ""; return; }
-    if (faceTimeObjectUrl) URL.revokeObjectURL(faceTimeObjectUrl);
-    faceTimeObjectUrl = URL.createObjectURL(file);
-    const portrait = $("#facetime-portrait");
-    portrait.src = faceTimeObjectUrl;
-    portrait.alt = `${file.name}（本地展示图片）`;
-    $("#facetime-empty").hidden = true;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      try { localStorage.setItem(FACETIME_PHOTO_KEY, reader.result); }
+      catch (error) { showModal("图片保存失败", "图片可能太大，请换一张尺寸较小的图片再试。", "!"); return; }
+      if (faceTimeObjectUrl) { URL.revokeObjectURL(faceTimeObjectUrl); faceTimeObjectUrl = null; }
+      const portrait = $("#facetime-portrait");
+      portrait.src = reader.result;
+      portrait.alt = `${file.name}（已保存的 FaceTime 展示图片）`;
+      $("#facetime-empty").hidden = true;
+    };
+    reader.onerror = () => showModal("图片读取失败", "请重新选择这张图片。", "!");
+    reader.readAsDataURL(file);
     event.target.value = "";
   });
   $("#facetime-mute").addEventListener("click", event => {
@@ -1644,18 +1879,29 @@
   $$(".mood-chip").forEach(button => button.addEventListener("click", () => { currentFilter = button.dataset.filter; $$(".mood-chip").forEach(chip => chip.classList.toggle("active", chip === button)); renderConversations(); }));
   $("#profile-done").addEventListener("click", () => showModal("Profile", "个人主页已就绪。新的聊天字卡会被收进 Saved。", "♡"));
   $$(".notes-row").forEach(button => button.addEventListener("click", () => {
-    currentNoteKind = button.dataset.noteKind;
-    $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null;
-    renderNotes(); renderLayout();
+    const kind = button.dataset.noteKind;
+    if (["letter","diary"].includes(kind)) { openNoteCollection(kind); return; }
+    currentNoteKind = kind; $("#notes-home").hidden = false; $("#note-collection").hidden=true; $("#note-reader").hidden=true; $("#note-editor").hidden = true; editingNoteId = null; renderNotes(); renderLayout();
   }));
   $("#new-note").addEventListener("click", () => {
     if (["letter", "diary", "collage"].includes(currentNoteKind)) { openNoteEditor(currentNoteKind); return; }
     const choice = window.prompt("新建内容类型：输入 letter（信件）、diary（日记）或 collage（字卡拼贴）", "diary");
     if (!choice) return; const type = choice.trim().toLowerCase(); if (!["letter", "diary", "collage"].includes(type)) { showModal("Type not found", "请输入 letter、diary 或 collage。", "✉"); return; } openNoteEditor(type);
   });
-  $("#notes-back").addEventListener("click", () => { $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; currentNoteKind = "all"; renderLayout(); renderNotes(); });
+  $("#notes-back").addEventListener("click", () => { if (["letter","diary"].includes(currentNoteKind)) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; currentNoteKind = "all"; renderLayout(); renderNotes(); } });
+  $("#collection-back").addEventListener("click", () => { $("#notes-home").hidden=false; $("#note-collection").hidden=true; selectedNoteIds.clear(); renderLayout(); renderNotes(); });
+  $("#reader-back").addEventListener("click", () => openNoteCollection(currentNoteKind));
+  $("#create-collection-note").addEventListener("click", () => openNoteEditor(currentNoteKind));
+  $("#reader-edit").addEventListener("click", () => { if (readingNoteId) openNoteEditor(currentNoteKind, readingNoteId); });
+  $("#reader-delete").addEventListener("click", deleteReadingNote);
+  $("#reader-options-button").addEventListener("click", () => { $("#reader-options-menu").hidden = !$("#reader-options-menu").hidden; });
+  $("#reader-menu-edit").addEventListener("click", () => { $("#reader-options-menu").hidden = true; if (readingNoteId) openNoteEditor("letter", readingNoteId); });
+  $("#reader-menu-delete").addEventListener("click", () => { $("#reader-options-menu").hidden = true; deleteReadingNote(); });
+  $("#reader-reply-button").addEventListener("click", replyToReadingNote);
+  $("#reader-return-button").addEventListener("click", () => { $("#reader-options-menu").hidden = true; openNoteCollection(currentNoteKind); });
+  $("#batch-delete-notes").addEventListener("click", async () => { if (!selectedNoteIds.size) return; const n=selectedNoteIds.size; if (await showModal("批量删除记录？",`确定删除选中的 ${n} 篇内容吗？此操作无法撤销。`,"!",{confirm:true,okText:"删除"})) { state.notes=state.notes.filter(note=>!selectedNoteIds.has(note.id)); selectedNoteIds.clear(); saveState(); renderNoteCollection(); renderNotes(); } });
   $("#save-note").addEventListener("click", saveNote);
-  $("#delete-note").addEventListener("click", async () => { if (!editingNoteId) return; const note = state.notes.find(n => n.id === editingNoteId); if (await showModal("Delete this note?", note?.title || "This note", "!", { confirm: true, okText: "Delete" })) { state.notes = state.notes.filter(n => n.id !== editingNoteId); saveState(); $("#notes-home").hidden = false; $("#note-editor").hidden = true; editingNoteId = null; currentNoteKind = "all"; renderLayout(); renderNotes(); } });
+  $("#delete-note").addEventListener("click", async () => { if (!editingNoteId) return; const note = state.notes.find(n => n.id === editingNoteId); if (await showModal("Delete this note?", note?.title || "This note", "!", { confirm: true, okText: "Delete" })) { state.notes = state.notes.filter(n => n.id !== editingNoteId); saveState(); editingNoteId = null; if (["letter","diary"].includes(currentNoteKind)) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden = false; $("#note-editor").hidden = true; currentNoteKind = "all"; renderLayout(); renderNotes(); } } });
   $("#month-prev").addEventListener("click", () => { calendarMonth--; if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; } renderCalendar(); });
   $("#month-next").addEventListener("click", () => { calendarMonth++; if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; } renderCalendar(); });
   $("#add-anniversary").addEventListener("click", addAnniversary);
@@ -1701,7 +1947,7 @@
   $("#edit-signature").addEventListener("click", () => { const signature = window.prompt("输入个人签名：", state.signature); if (signature !== null) { state.signature = signature.trim(); $("#profile-signature").textContent = state.signature; saveState(); renderMe(); } });
   $("#export-data").addEventListener("click", downloadJson);
   $("#reset-data").addEventListener("click", async () => { if (await showModal("Reset local data?", "这会清除本浏览器中的 Notes、字卡、聊天记录和自定义纪念日。", "!", { confirm: true, okText: "Reset" })) { state = freshState(); saveState(); selectedDate = todayKey(); calendarYear = new Date().getFullYear(); calendarMonth = new Date().getMonth(); $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature; renderConversations(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderNotes(); switchTab("message"); showModal("Reset complete", "本地数据已恢复为初始 Demo 内容。", "✓"); } });
-  $("#top-action").addEventListener("click", () => { if (activeTab === "message" && inChat) openChatPreferences(); else if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes") $("#new-note").click(); else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。", "✎"); });
+  $("#top-action").addEventListener("click", () => { if (activeTab === "message" && inChat) openChatPreferences(); else if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes" && !$("#note-reader").hidden) { if (readingNoteId) openNoteEditor(currentNoteKind, readingNoteId); } else if (activeTab === "notes") { if (!$("#note-collection").hidden) $("#create-collection-note").click(); else $("#new-note").click(); } else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。", "✎"); });
 
   $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature;
   if (state.profileAvatar) { $("#profile-avatar").src = state.profileAvatar; const meAvatar = $("#me-profile-avatar"); if (meAvatar) meAvatar.src = state.profileAvatar; }
@@ -1760,5 +2006,5 @@
     nameInput.focus();
   }
   $("#add-contact-btn").addEventListener("click", openAddContactModal);
-  renderConversations(); renderMessages(); renderNotes(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderLayout();
+  renderCustomStickers(); renderConversations(); renderMessages(); renderNotes(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderLayout();
 })();

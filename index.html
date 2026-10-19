@@ -136,8 +136,24 @@
         </section>
         <section class="sticker-tray" id="sticker-tray" hidden aria-label="Sticker picker">
           <div class="panel-title-row"><strong>Stickers & little faces</strong><button class="panel-close" id="close-stickers" type="button" aria-label="Close stickers">×</button></div>
+          <form class="custom-sticker-form" id="custom-sticker-form">
+            <input id="custom-sticker-input" type="text" maxlength="100" autocomplete="off" placeholder="粘贴你自己的颜文字…" aria-label="添加自己的颜文字">
+            <button type="submit">＋ 添加</button>
+          </form>
+          <div class="sticker-grid-heading">Quick picks · 点击发送，× 删除自定义颜文字</div>
           <div class="sticker-grid" id="sticker-grid">
-            <button type="button" data-sticker="♡">♡</button><button type="button" data-sticker="(｡•́︿•̀｡)">(｡•́︿•̀｡)</button><button type="button" data-sticker="(｡♥‿♥｡)">(｡♥‿♥｡)</button><button type="button" data-sticker=":3">:3</button><button type="button" data-sticker="(╥﹏╥)">(╥﹏╥)</button><button type="button" data-sticker="(¬_¬)">(¬_¬)</button><button type="button" data-sticker="✧･ﾟ">✧･ﾟ</button><button type="button" data-sticker="(づ｡◕‿‿◕｡)づ">(づ｡◕‿‿◕｡)づ</button><button type="button" data-sticker="xoxo">xoxo</button><button type="button" data-sticker="( ˘ ³˘)♥">( ˘ ³˘)♥</button><button type="button" data-sticker="T_T">T_T</button><button type="button" data-sticker="★彡">★彡</button>
+            <button type="button" data-sticker="(^３^)">(^３^)</button>
+            <button type="button" data-sticker="ヽ(｡ゝω・｡)ﾉ">ヽ(｡ゝω・｡)ﾉ</button>
+            <button type="button" data-sticker="((ﾐ´ω`ﾐ))">((ﾐ´ω`ﾐ))</button>
+            <button type="button" data-sticker="(=^ω^=)">(=^ω^=)</button>
+            <button type="button" data-sticker="(*-ω-)">(*-ω-)</button>
+            <button type="button" data-sticker="↖(^ω^)↗">↖(^ω^)↗</button>
+            <button type="button" data-sticker="Y(^_^)Y">Y(^_^)Y</button>
+            <button type="button" data-sticker="(｡･ω･｡)">(｡･ω･｡)</button>
+            <button type="button" data-sticker="Σ(・ω・`|||)">Σ(・ω・`|||)</button>
+            <button type="button" data-sticker="#^_^#">#^_^#</button>
+            <button type="button" data-sticker=">_<¦¦¦">&gt;_&lt;¦¦¦</button>
+            <button type="button" data-sticker="^ω^">^ω^</button>
           </div>
         </section>
         <form class="composer" id="composer">
@@ -160,10 +176,34 @@
           <button class="new-note-button" id="new-note">＋ New Note</button>
           <div class="notes-saved-list" id="notes-saved-list"></div>
         </div>
+        <div id="note-collection" hidden>
+          <button class="text-back" id="collection-back">‹ Notes</button>
+          <div class="collection-actions-top"><button class="small-blue-btn secondary" id="batch-delete-notes" disabled>删除所选 (0)</button></div>
+          <div id="note-collection-groups"></div>
+          <button class="new-note-button" id="create-collection-note">＋ 写一封信</button>
+        </div>
+        <div id="note-reader" hidden>
+          <section id="feature-letter-reader" class="feature-letter-reader" hidden aria-label="古早功能机信件阅读器">
+            <div class="feature-message-status"><strong id="reader-sender">薇薇</strong><time id="reader-timestamp">17-Oct-2026 13:52</time></div>
+            <article class="feature-message-body">
+              <div class="feature-message-divider"></div>
+              <div class="feature-message-subject" id="reader-subject"></div>
+              <p class="feature-sms-line"><strong id="reader-prefix">【薇薇】:</strong><span id="reader-sms-content"></span></p>
+            </article>
+            <div class="feature-options-menu" id="reader-options-menu" hidden><button type="button" id="reader-menu-edit">编辑信件</button><button type="button" id="reader-menu-delete">删除信件</button></div>
+            <div class="feature-softkeys" role="group" aria-label="信件功能按键"><button type="button" id="reader-options-button">选项</button><button type="button" id="reader-reply-button">回复</button><button type="button" id="reader-return-button">返回</button></div>
+          </section>
+          <section id="diary-reader-legacy" hidden>
+            <button class="text-back" id="reader-back">‹ 返回日记</button>
+            <article class="vintage-paper"><div class="vintage-stamp">♡</div><div class="vintage-kicker" id="reader-kind">A PAGE FROM THE DIARY</div><h2 id="reader-title"></h2><div class="vintage-rule"></div><div class="vintage-content" id="reader-content"></div><div class="vintage-signoff" id="reader-signoff"></div><div class="vintage-date" id="reader-date"></div></article>
+            <div class="editor-actions"><button class="small-blue-btn" id="reader-edit">编辑</button><button class="small-blue-btn secondary" id="reader-delete">删除</button></div>
+          </section>
+        </div>
         <div id="note-editor" hidden>
           <button class="text-back" id="notes-back">‹ All Notes</button>
           <div class="editor-paper">
             <label for="note-title">Title</label><input id="note-title" maxlength="80" placeholder="A little thing to remember...">
+            <label for="note-owner">这份记录属于</label><select id="note-owner"><option value="vivi">薇薇</option><option value="mortimer">莫蒂</option></select>
             <label for="note-content">Your words</label><textarea id="note-content" placeholder="把那些没来得及说出口的话，留在这里……"></textarea>
           </div>
           <div class="editor-actions"><button class="small-blue-btn" id="save-note">Save note</button><button class="small-blue-btn secondary" id="delete-note" hidden>Delete</button></div>
