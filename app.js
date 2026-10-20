@@ -90,6 +90,9 @@
   let pressStart = null;
   let suppressMessageClickUntil = 0;
   let openMessageMenuId = null;
+  // The mini chat on the Music page is a compact view of one existing contact thread.
+  let musicPagerSelectedContactId = null;
+  let musicPagerNotice = "";
   const CARD_UI_KEY = "retroOtome_cardLibraryUI_v1";
   let cardUI = (() => { try { return { listCollapsed: true, groupManagerCollapsed: true, collapsedGroups: {}, ...(JSON.parse(localStorage.getItem(CARD_UI_KEY) || "{}")) }; } catch { return { listCollapsed: true, groupManagerCollapsed: true, collapsedGroups: {} }; } })();
   const selectedCardIds = new Set();
@@ -171,6 +174,7 @@
     if (!(activeTab === "message" && inChat)) { $("#extension-panel").hidden = true; $("#sticker-tray").hidden = true; }
     const messageListVisible = activeTab === "message" && !inChat;
     const musicBoardOpen = activeTab === "notes" && !$("#notes-music-board").hidden;
+    const tamagotchiBoardOpen = activeTab === "notes" && !$("#notes-tamagotchi-board").hidden;
     $("#page-message").hidden = !messageListVisible;
     $("#page-chat").hidden = !(activeTab === "message" && inChat);
     $("#page-notes").hidden = activeTab !== "notes";
@@ -181,24 +185,34 @@
     const readingNote = state.notes.find(note => note.id === readingNoteId);
     $(".phone").classList.toggle("feature-reader-active", activeTab === "notes" && !$("#note-reader").hidden && ["letter", "diary"].includes(readingNote?.type));
     $("#top-action").hidden = false;
-    $(".tab-bar").hidden = (activeTab === "message" && inChat) || musicBoardOpen;
+    $(".tab-bar").hidden = (activeTab === "message" && inChat) || musicBoardOpen || tamagotchiBoardOpen;
     $(".phone").classList.toggle("music-board-active", musicBoardOpen);
+    $(".phone").classList.toggle("tamagotchi-board-active", tamagotchiBoardOpen);
     $("#add-contact-btn").hidden = !(activeTab === "message" && !inChat);
     $(".phone").classList.toggle("chat-immersive", activeTab === "message" && inChat);
     const titles = { message: inChat ? currentContact().name : "Message", notes: !$("#note-reader").hidden ? (currentNoteKind === "diary" ? "Diary" : "Letter") : !$("#note-editor").hidden ? "Note Editor" : !$("#note-collection").hidden ? ({ letter: "Letters", diary: "Diary", all: "All Fragments" }[currentNoteKind] || "Notes") : "Notes", saved: "Saved", me: "Me" };
-    $("#top-title").textContent = musicBoardOpen ? "Music" : titles[activeTab];
-    $("#top-action").textContent = musicBoardOpen ? "‹ Back" : activeTab === "message" && inChat ? "Edit" : activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : (!$("#note-reader").hidden ? "Edit" : "＋ New")) : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
+    $("#top-title").textContent = musicBoardOpen ? "Music" : tamagotchiBoardOpen ? "Tamagotchi" : titles[activeTab];
+    $("#top-action").textContent = musicBoardOpen || tamagotchiBoardOpen ? "‹ Back" : activeTab === "message" && inChat ? "Edit" : activeTab === "notes" ? (!$("#note-editor").hidden ? "Save" : (!$("#note-reader").hidden ? "Edit" : "＋ New")) : activeTab === "saved" ? "+ Date" : (activeTab === "message" && !inChat && state.hiddenContacts.length ? (showHiddenContacts ? "Hide list" : `Hidden ${state.hiddenContacts.length}`) : "Edit");
   }
   function switchTab(tab) {
     activeTab = tab; inChat = false; endSelectionMode();
-    if (tab === "notes") { $("#notes-home").hidden = false; $("#notes-music-board").hidden = true; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = true; editingNoteId = null; readingNoteId = null; selectedNoteIds.clear(); }
+    if (tab === "notes") { $("#notes-home").hidden = false; $("#notes-music-board").hidden = true; $("#notes-tamagotchi-board").hidden = true; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = true; editingNoteId = null; readingNoteId = null; selectedNoteIds.clear(); }
     renderLayout();
     if (tab === "message") renderConversations();
     if (tab === "notes") renderNotes();
     if (tab === "saved") { renderCalendar(); renderSavedDay(); renderAnniversaries(); }
     if (tab === "me") renderMe();
   }
-  function openChat(id) { activeContactId = id; inChat = true; activeTab = "message"; endSelectionMode(); renderLayout(); renderMessages(); }
+  function openChat(id) {
+    activeContactId = id;
+    inChat = true;
+    activeTab = "message";
+    // Mirror the currently opened character in the Music mini-chat until the user picks another recipient there.
+    musicPagerSelectedContactId = id;
+    state.musicPagerContactId = id;
+    saveState();
+    endSelectionMode(); renderLayout(); renderMessages();
+  }
 
   function renderConversations() {
     const list = $("#conversation-list"); list.replaceChildren();
@@ -684,7 +698,10 @@
     hideThinkingIndicator();
     const pool = allCards();
     if (!pool.length) {
-      if (activeTab === "message" && inChat && activeContactId === contactId) {
+      if (isMusicBoardVisible() && musicPagerContactId() === contactId) {
+        musicPagerNotice = "字卡库里没有可用内容。请到 Me 添加字卡，或启用至少一张字卡及其所属分组。";
+        renderMusicPagerChat();
+      } else if (activeTab === "message" && inChat && activeContactId === contactId) {
         showModal("字卡库暂时没有可抽取内容", "请前往 Me 添加字卡，或启用至少一张字卡及其所属分组。", "✧");
       }
       return;
@@ -737,7 +754,9 @@
     picked.forEach(card => { if (!state.collected.includes(card.text)) state.collected.unshift(card.text); });
     // Receiving a reply is not an explicit save action; Saved only stores manual bookmarks.
     saveState();
+    musicPagerNotice = "";
     if (activeTab === "message" && inChat && activeContactId === contactId) renderMessages();
+    if (musicPagerContactId() === contactId) renderMusicPagerChat();
     renderConversations(); renderNotes(); renderMe();
     if (useVoice) void prepareVoiceTranslation(message, preferences);
   }
@@ -753,6 +772,10 @@
       if (preferences.noReplyEnabled && Math.random() * 100 >= Number(preferences.replyProbability)) {
         // A no-reply outcome is still a read receipt: the message is seen, but no response arrives.
         markMessagesRead(contactId, "sent"); saveState();
+        if (isMusicBoardVisible() && musicPagerContactId() === contactId) {
+          musicPagerNotice = "已读 · 本次按这个角色的聊天偏好未回复";
+          renderMusicPagerChat();
+        }
         if (activeTab === "message" && inChat && activeContactId === contactId) {
           renderMessages();
           const note = document.createElement("div"); note.className = "no-reply-note"; note.textContent = "Read · no reply";
@@ -1557,7 +1580,7 @@
   function updateClock() {}
 
   $$(".tab-item").forEach(button => button.addEventListener("click", () => switchTab(button.dataset.tab)));
-  $("#back-btn").addEventListener("click", () => { if (inChat) { inChat = false; renderLayout(); renderConversations(); } else if (activeTab === "notes") { if (!$("#note-editor").hidden) { if (["letter","diary"].includes(currentNoteKind)) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden=false; $("#note-editor").hidden=true; renderNotes(); renderLayout(); } } else if (!$("#note-reader").hidden) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden = false; $("#note-collection").hidden=true; $("#note-reader").hidden=true; $("#note-editor").hidden = true; selectedNoteIds.clear(); renderLayout(); renderNotes(); } } });
+  $("#back-btn").addEventListener("click", () => { if (inChat) { inChat = false; renderLayout(); renderConversations(); } else if (activeTab === "notes") { if (!$("#notes-tamagotchi-board").hidden) { $("#notes-tamagotchi-board").hidden = true; $("#notes-home").hidden = false; renderLayout(); } else if (!$("#note-editor").hidden) { if (["letter","diary"].includes(currentNoteKind)) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden=false; $("#note-editor").hidden=true; renderNotes(); renderLayout(); } } else if (!$("#note-reader").hidden) openNoteCollection(currentNoteKind); else { $("#notes-home").hidden = false; $("#note-collection").hidden=true; $("#note-reader").hidden=true; $("#note-editor").hidden = true; selectedNoteIds.clear(); renderLayout(); renderNotes(); } } });
   $("#composer").addEventListener("submit", event => { event.preventDefault(); sendMessage($("#message-input").value); });
   $("#cancel-selection").addEventListener("click", () => { endSelectionMode(); renderMessages(); });
   $("#delete-selected").addEventListener("click", deleteSelectedMessages);
@@ -2008,6 +2031,96 @@
   const MUSIC_PLAYLISTS_KEY = "retroOtomeMusicPlaylistSourcesV1";
   const MUSIC_SAVED_KEY = "retroOtomeMusicSavedTracksV1";
   const MUSIC_SELECTED_PLAYLIST_KEY = "retroOtomeMusicSelectedPlaylistV1";
+  const NETEASE_API_BASE_KEY = "retroOtomeNetEaseApiBaseV1";
+  const NETEASE_COOKIE_SESSION_KEY = "retroOtomeNetEaseCookieSessionV1";
+  const NETEASE_COOKIE_SAVED_KEY = "retroOtomeNetEaseCookieSavedV1";
+  const NETEASE_UID_SESSION_KEY = "retroOtomeNetEaseUidSessionV1";
+  function getNetEaseApiBase() {
+    try { return String(localStorage.getItem(NETEASE_API_BASE_KEY) || "").trim().replace(/\/+$/, ""); } catch (_) { return ""; }
+  }
+  function getNetEaseSessionCookie() {
+    try {
+      const sessionCookie = String(sessionStorage.getItem(NETEASE_COOKIE_SESSION_KEY) || "").trim();
+      if (sessionCookie) return sessionCookie;
+    } catch (_) {}
+    // An explicitly saved cookie is only read from this browser's local storage.
+    // It is not part of app state or the downloadable backup.
+    try { return String(localStorage.getItem(NETEASE_COOKIE_SAVED_KEY) || "").trim(); } catch (_) { return ""; }
+  }
+  function saveNetEaseCookieForThisBrowser(cookie) {
+    const value = String(cookie || "").trim();
+    if (!value) return false;
+    try {
+      localStorage.setItem(NETEASE_COOKIE_SAVED_KEY, value);
+      try { sessionStorage.setItem(NETEASE_COOKIE_SESSION_KEY, value); } catch (_) {}
+      return true;
+    } catch (_) { return false; }
+  }
+  function getNetEaseSessionUid() {
+    try { return String(sessionStorage.getItem(NETEASE_UID_SESSION_KEY) || "").trim(); } catch (_) { return ""; }
+  }
+  function netEaseCookieWriteOnlyStorage(cookie) {
+    // This helper only updates the current session. Persistent saving is a separate, explicit button action.
+    // Neither copy is included in app state or downloadable backups.
+    try { if (cookie) sessionStorage.setItem(NETEASE_COOKIE_SESSION_KEY, cookie); else sessionStorage.removeItem(NETEASE_COOKIE_SESSION_KEY); } catch (_) {}
+  }
+  function netEaseApiUrl(path, params = {}) {
+    const base = getNetEaseApiBase();
+    if (!base) throw new Error("还没有设置网易云 API 地址。请先部署自己的网易云 API，再把 HTTPS 地址填到 Play 连接面板里。");
+    const url = new URL(String(path || "").replace(/^\/+/, ""), `${base}/`);
+    Object.entries(params || {}).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value)); });
+    return url;
+  }
+  async function requestNetEaseApi(path, params = {}, options = {}) {
+    const cookie = options.cookie === undefined ? getNetEaseSessionCookie() : String(options.cookie || "").trim();
+    const url = netEaseApiUrl(path, params);
+    const request = { mode:"cors", credentials:"omit", cache:"no-store" };
+    if (cookie && options.auth !== false) {
+      // Keep the cookie out of the URL/query string. The deployed API still receives it in the POST body.
+      request.method = "POST";
+      request.headers = { "Content-Type":"application/json" };
+      request.body = JSON.stringify({ cookie });
+    }
+    let response;
+    try { response = await fetch(url.toString(), request); }
+    catch (error) { throw new Error(`无法连接网易云 API。请检查地址、HTTPS 和后端跨域设置。${error?.message ? ` (${error.message})` : ""}`); }
+    if (!response.ok) throw new Error(`网易云 API 返回 HTTP ${response.status}（${path}）`);
+    let payload;
+    try { payload = await response.json(); } catch (_) { throw new Error("API 返回的不是 JSON。请确认填写的是 API 服务根地址，而不是 GitHub 页面或文档页面。"); }
+    const code = Number(payload?.code);
+    if (Number.isFinite(code) && code && ![200, 0].includes(code)) {
+      const message = payload?.message || payload?.msg || "";
+      throw new Error(`网易云 API 返回错误 ${code}${message ? `：${message}` : ""}`);
+    }
+    return payload;
+  }
+  function netEaseProfileFromPayload(payload) {
+    return payload?.data?.profile || payload?.profile || payload?.data?.data?.profile || payload?.body?.profile || payload?.data?.account || payload?.account || null;
+  }
+  function netEasePlaylistArrayFromPayload(payload) {
+    const candidates = [payload?.playlist, payload?.data?.playlist, payload?.body?.playlist, payload?.data?.data?.playlist, payload?.data?.body?.playlist, payload?.result?.playlist, payload?.data?.result?.playlist];
+    return candidates.find(Array.isArray) || [];
+  }
+  function netEaseSongArrayFromPayload(payload) {
+    const playlist = payload?.playlist || payload?.data?.playlist || payload?.body?.playlist || payload?.data?.data?.playlist || payload?.result?.playlist || payload?.result;
+    const candidates = [playlist?.tracks, playlist?.songs, payload?.songs, payload?.data?.songs, payload?.data?.data?.songs];
+    return candidates.find(Array.isArray) || [];
+  }
+  function mapNetEaseSongs(songs) {
+    return (Array.isArray(songs) ? songs : []).map((song, index) => {
+      const album = song?.al || song?.album || {};
+      const artists = song?.ar || song?.artists || song?.song?.ar || [];
+      const id = song?.id || song?.song?.id || song?.trackId || "";
+      if (!id) return null;
+      return {
+        id:`netease-${id}`, neteaseId:String(id), title:String(song?.name || song?.song?.name || `歌曲 ${index+1}`),
+        artist:(Array.isArray(artists) ? artists : []).map(person => person?.name || person).filter(Boolean).join(" / ") || "未知歌手",
+        duration:Math.round(Number(song?.dt || song?.duration || song?.song?.dt || 0) / 1000),
+        cover:album?.picUrl || album?.pic_url || song?.picUrl || "", lyrics:[], platform:"网易云音乐",
+        externalUrl:`https://music.163.com/#/song?id=${encodeURIComponent(id)}`
+      };
+    }).filter(Boolean);
+  }
   const DEFAULT_QQ_PLAYLIST = {
     id: "qq-shared-playlist-9795540748",
     platform: "QQ音乐",
@@ -2202,19 +2315,20 @@
     }
   }
   async function readNetEasePlaylist(playlistId) {
-    const response = await fetch(`https://music.163.com/api/playlist/detail?id=${encodeURIComponent(playlistId)}&csrf_token=`, { credentials:"omit", mode:"cors" });
-    if (!response.ok) throw new Error(`网易云读取失败（HTTP ${response.status}）`);
-    const payload = await response.json();
-    const playlist = payload?.playlist || payload?.result;
-    const songs = playlist?.tracks || playlist?.trackIds?.map(item => item) || [];
-    if (!Array.isArray(songs) || !songs.length || !songs[0]?.name) throw new Error("网易云没有返回公开歌单的歌曲列表；可能需要登录或使用可访问的分享链接。");
-    const tracks = songs.map((song, index) => ({
-      id:`netease-${song.id || uid()}`, title:String(song.name || `歌曲 ${index+1}`),
-      artist:(song.ar || song.artists || []).map(person => person.name).filter(Boolean).join(" / ") || "未知歌手",
-      duration:Math.round(Number(song.dt || song.duration || 0) / 1000), cover:song.al?.picUrl || song.album?.picUrl || "", lyrics:[],
-      externalUrl:`https://music.163.com/#/song?id=${encodeURIComponent(song.id)}`, platform:"网易云音乐"
-    }));
-    return { name:playlist.name || "网易云歌单", tracks };
+    let payload;
+    if (getNetEaseApiBase()) {
+      payload = await requestNetEaseApi("playlist/detail", { id:String(playlistId), limit:1000, offset:0 });
+    } else {
+      // Legacy public-only fallback. The authenticated/account route requires a deployed API base.
+      const response = await fetch(`https://music.163.com/api/playlist/detail?id=${encodeURIComponent(playlistId)}&csrf_token=`, { credentials:"omit", mode:"cors" });
+      if (!response.ok) throw new Error(`网易云读取失败（HTTP ${response.status}）`);
+      payload = await response.json();
+    }
+    const playlist = payload?.playlist || payload?.data?.playlist || payload?.body?.playlist || payload?.result?.playlist || payload?.result || payload?.data?.result || payload?.data;
+    const songs = netEaseSongArrayFromPayload(payload);
+    const tracks = mapNetEaseSongs(songs);
+    if (!tracks.length) throw new Error("网易云 API 没有返回歌曲列表。请确认歌单可访问，并检查部署的 API 版本是否支持 /playlist/detail。");
+    return { name:playlist?.name || "网易云歌单", tracks };
   }
   function musicTrackDedupeKeys(track) {
     const keys = [];
@@ -2247,6 +2361,44 @@
     });
     return unique;
   }
+  function netEaseTrackId(track) {
+    return String(track?.neteaseId || track?.id || "").replace(/^netease-/, "").trim();
+  }
+  async function getNetEaseTrackPlaybackUrl(track) {
+    const id = netEaseTrackId(track);
+    if (!/^\d+$/.test(id)) throw new Error("这首网易云歌曲缺少有效的歌曲 ID，请重新导入歌单。");
+    if (track.playbackUrl && track.playbackUrlExpiresAt && Date.now() < track.playbackUrlExpiresAt - 30000) return track.playbackUrl;
+    const payload = await requestNetEaseApi("song/url/v1", { id, level:"standard" });
+    const item = payload?.data?.[0] || payload?.data?.data?.[0] || payload?.body?.data?.[0];
+    const url = item?.url || item?.urlInfo?.url || "";
+    if (!url || !/^https?:\/\//i.test(url)) throw new Error("网易云没有返回可用的标准音质播放地址。该歌曲可能受版权、地区、账号权限或资源状态限制；不会尝试绕过限制。");
+    track.playbackUrl = url;
+    track.playbackUrlExpiresAt = Date.now() + 20 * 60 * 1000;
+    return url;
+  }
+  async function loadNetEaseLyrics(track) {
+    if (!track || track.platform !== "网易云音乐" || track.lyricsLoaded || track.lyricsLoading || (Array.isArray(track.lyrics) && track.lyrics.length)) return;
+    const id = netEaseTrackId(track);
+    if (!/^\d+$/.test(id) || !getNetEaseApiBase()) return;
+    track.lyricsLoading = true;
+    try {
+      const payload = await requestNetEaseApi("lyric", { id });
+      const lyricText = payload?.lrc?.lyric || payload?.data?.lrc?.lyric || payload?.body?.lrc?.lyric || payload?.data?.data?.lrc?.lyric || "";
+      const lyrics = parseMusicLrc(lyricText);
+      track.lyricsLoaded = true;
+      if (lyrics.length) {
+        track.lyrics = lyrics;
+        track.lyricSource = "online";
+        persistMusicLyrics(track);
+      }
+      if (activeMusicTrackId === track.id) renderMusicLyrics(track);
+    } catch (error) {
+      track.lyricsLoaded = false;
+      track.lyricLoadError = error?.message || "在线歌词获取失败";
+      // No modal here: a failed lyrics request should not interrupt choosing/playing a track.
+    } finally { track.lyricsLoading = false; }
+  }
+
   function persistDedupedMusicPlaylist(source) {
     if (!source?.id) return;
     const sources = safeReadMusicSources();
@@ -2290,13 +2442,25 @@
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${colors[0]}"/><stop offset=".52" stop-color="${colors[1]}"/><stop offset="1" stop-color="${colors[2]}"/></linearGradient></defs><rect width="320" height="320" fill="url(#g)"/><circle cx="250" cy="70" r="88" fill="#ffffff" opacity=".18"/><circle cx="70" cy="270" r="120" fill="#536d88" opacity=".12"/><path d="M36 208 Q160 120 284 208" fill="none" stroke="#ffffff" stroke-width="3" opacity=".55"/><text x="160" y="190" text-anchor="middle" font-family="Arial,sans-serif" font-size="112" font-weight="700" fill="#ffffff" opacity=".9">${letter || "M"}</text></svg>`;
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
+  const MUSIC_CONTROL_ICONS = {
+    play: '<svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2a1 1 0 0 1 1.52-.85l10.05 6.8a1 1 0 0 1 0 1.7l-10.05 6.8A1 1 0 0 1 8 18.8V5.2Z"/></svg>',
+    pause: '<svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4.5v14H6zM13.5 5H18v14h-4.5z"/></svg>',
+    volume: '<svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="M15 8.3a5.2 5.2 0 0 1 0 7.4M17.8 5.6a9 9 0 0 1 0 12.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    muted: '<svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="m16 9 5 6m0-6-5 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+    previous: '<svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2v14H5zM19 5.2 8 12l11 6.8V5.2Z"/></svg>',
+    next: '<svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2zM5 5.2 16 12 5 18.8V5.2Z"/></svg>',
+    list: '<svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v2H4zM4 11h16v2H4zM4 17h16v2H4z"/></svg>'
+  };
+  function setMusicControlIcon(button, name) {
+    if (button && MUSIC_CONTROL_ICONS[name]) button.innerHTML = MUSIC_CONTROL_ICONS[name];
+  }
   function setMusicPlayButton(playing) {
     const main = $("#music-main-play");
-    if (main) main.textContent = playing ? "Ⅱ" : "▶";
+    if (main) setMusicControlIcon(main, playing ? "pause" : "play");
     musicTracks.forEach(track => {
       if (!track.row) return;
       const button = $(".music-track-play", track.row);
-      if (button) button.textContent = track.id === activeMusicTrackId && playing ? "Ⅱ" : "▶";
+      if (button) setMusicControlIcon(button, track.id === activeMusicTrackId && playing ? "pause" : "play");
     });
   }
   function updateMusicTrackCount() {
@@ -2444,7 +2608,7 @@
     updateMusicNowPlaying(track);
     renderMusicTrackProgress(track, track.audio?.duration ? (track.audio.currentTime || 0) / track.audio.duration : 0);
     syncMusicLyrics(track, track.audio?.currentTime || 0, true);
-    // 歌词完全使用本地 LRC；不再依赖易失效的 QQ 在线歌词接口。
+    if (track.platform === "网易云音乐") loadNetEaseLyrics(track);
     if (autoplay) playMusicTrack(track);
   }
   function normalizedQQMatchText(value) {
@@ -2641,11 +2805,11 @@
     if (!track.audio) {
       setMusicPlayButton(false);
       if (track.loadingAudio) return;
-      if (track.isRemote && track.platform === "QQ音乐") {
+      if (track.isRemote && (track.platform === "QQ音乐" || track.platform === "网易云音乐")) {
         track.loadingAudio = true;
         const requestTrackId = activeMusicTrackId;
         try {
-          const playUrl = await getQQTrackPlaybackUrl(track);
+          const playUrl = track.platform === "网易云音乐" ? await getNetEaseTrackPlaybackUrl(track) : await getQQTrackPlaybackUrl(track);
           if (activeMusicTrackId !== requestTrackId || activeMusicTrackId !== track.id) return;
           const audio = new Audio(playUrl);
           attachMusicAudioEvents(track, audio);
@@ -2654,7 +2818,7 @@
         } catch (error) {
           setMusicPlayButton(false);
           const reason = error?.message || "无法获取可用的音源";
-          await showModal("这首歌暂时无法在网页内播放", `${reason}\n\n播放器不会跳转到 QQ 音乐，也不会尝试绕过付费或版权限制。你可以试试歌单里的其他歌曲，或导入自己有权使用的本地音频文件。`, "!");
+          await showModal("这首歌暂时无法在网页内播放", `${reason}\n\n播放器不会跳转到外部音乐平台，也不会尝试绕过付费或版权限制。你可以试试歌单里的其他歌曲，或导入自己有权使用的本地音频文件。`, "!");
         } finally { track.loadingAudio = false; }
         return;
       }
@@ -2681,7 +2845,7 @@
     if (track.audio.paused) playMusicTrack(track); else track.audio.pause();
   }
   function goToMusicTrack(direction, onlyPlayable = false) {
-    const realTracks = musicTracks.filter(track => track.audio || (track.isRemote && track.platform === "QQ音乐"));
+    const realTracks = musicTracks.filter(track => track.audio || (track.isRemote && ["QQ音乐", "网易云音乐"].includes(track.platform)));
     const pool = onlyPlayable ? realTracks : (realTracks.length ? realTracks : musicTracks);
     if (!pool.length || pool.length < 2) return;
     const currentIndex = Math.max(0, pool.findIndex(track => track.id === activeMusicTrackId));
@@ -2700,7 +2864,7 @@
   function createMusicTrackRow(track) {
     const row = document.createElement("div"); row.className = "music-track-row"; row.dataset.musicId = track.id;
     const pick = document.createElement("input"); pick.type = "checkbox"; pick.className = "music-track-select"; pick.setAttribute("aria-label", `选择歌曲 ${track.title}`); pick.checked = Boolean(track.selectedForDelete); pick.addEventListener("change", () => { track.selectedForDelete = pick.checked; syncMusicTrackSelection(); });
-    const play = document.createElement("button"); play.type = "button"; play.className = "music-track-play"; play.setAttribute("aria-label", `播放 ${track.title}`); play.textContent = "▶";
+    const play = document.createElement("button"); play.type = "button"; play.className = "music-track-play"; play.setAttribute("aria-label", `播放 ${track.title}`); setMusicControlIcon(play, "play");
     const main = document.createElement("div"); main.className = "music-track-main";
     const title = document.createElement("strong"); title.textContent = track.title;
     const progress = document.createElement("div"); progress.className = "music-mini-progress";
@@ -2879,12 +3043,14 @@
     $("#music-next-track").addEventListener("click", () => goToMusicTrack(1));
     $("#music-open-playlists-shortcut").addEventListener("click", openMusicPlaylistPicker);
     const musicHomeButton = $(".music-dock-button");
-    if (musicHomeButton) musicHomeButton.addEventListener("click", () => { $("#notes-music-board").hidden = true; $("#notes-home").hidden = false; renderLayout(); });
+    if (musicHomeButton) musicHomeButton.addEventListener("click", () => { $("#notes-music-board").hidden = true; $("#notes-tamagotchi-board").hidden = true; $("#notes-home").hidden = false; renderLayout(); });
+    const musicNetEaseConnectButton = $("#music-dock-play");
+    if (musicNetEaseConnectButton) musicNetEaseConnectButton.addEventListener("click", openNetEaseConnectPanel);
     $("#music-open-playlists").addEventListener("click", openMusicPlaylistPicker);
     $("#music-volume-toggle").addEventListener("click", () => {
       musicMuted = !musicMuted;
       musicTracks.forEach(track => { if (track.audio) track.audio.muted = musicMuted; });
-      $("#music-volume-toggle").textContent = musicMuted ? "◖×" : "◖))";
+      setMusicControlIcon($("#music-volume-toggle"), musicMuted ? "muted" : "volume");
       $("#music-volume-toggle").setAttribute("aria-pressed", String(musicMuted));
     });
     $$(".music-row-volume-slider").forEach(slider => slider.addEventListener("input", event => {
@@ -2921,21 +3087,133 @@
     updateMusicTrackCount();
     if (musicSelectedPlaylist?.tracks?.length) activateMusicPlaylist(musicSelectedPlaylist);
   }
+  async function openNetEaseConnectPanel() {
+    setupMusicPlayer();
+    const modalPromise = showModal("网易云音乐连接", "填写你部署的 API 地址；Cookie 可用于读取账号歌单。点击「保存 Cookie」可记住此浏览器上的登录凭证。", "♫", { confirm:true, okText:"测试并连接" });
+    const extra = $("#modal-extra"); extra.replaceChildren();
+    const addLabel = (labelText, control) => { const label = document.createElement("label"); label.className = "music-playlist-field"; const caption = document.createElement("span"); caption.textContent = labelText; label.append(caption, control); extra.append(label); };
+    const apiBase = document.createElement("input"); apiBase.className = "music-playlist-input"; apiBase.type = "url"; apiBase.inputMode = "url"; apiBase.placeholder = "https://你的-api-项目.vercel.app"; apiBase.autocomplete = "url"; apiBase.value = getNetEaseApiBase();
+    const cookie = document.createElement("input"); cookie.className = "music-playlist-input"; cookie.type = "password"; cookie.autocomplete = "off"; cookie.spellcheck = false; cookie.placeholder = "可选：网易云 Cookie（不要填账号密码）"; cookie.value = getNetEaseSessionCookie();
+    const userId = document.createElement("input"); userId.className = "music-playlist-input"; userId.type = "text"; userId.inputMode = "numeric"; userId.autocomplete = "off"; userId.placeholder = "可选：网易云用户 ID（登录状态未返回时填写）"; userId.value = getNetEaseSessionUid();
+    addLabel("你自己的 API 地址", apiBase); addLabel("账号 Cookie（可选）", cookie); addLabel("用户 ID（可选）", userId);
+    const saveCookie = document.createElement("button");
+    saveCookie.type = "button";
+    saveCookie.className = "small-blue-btn music-cookie-save-button";
+    saveCookie.textContent = "保存 Cookie";
+    saveCookie.addEventListener("click", () => {
+      if (saveNetEaseCookieForThisBrowser(cookie.value)) {
+        saveCookie.textContent = "Cookie 已保存";
+        saveCookie.setAttribute("aria-label", "Cookie 已保存到此浏览器");
+      } else {
+        saveCookie.textContent = cookie.value.trim() ? "保存失败" : "请先填写 Cookie";
+      }
+    });
+    cookie.addEventListener("input", () => { saveCookie.textContent = "保存 Cookie"; });
+    extra.append(saveCookie);
+    const accepted = await modalPromise;
+    if (!accepted) return;
+    let normalizedBase;
+    try {
+      const parsed = new URL(apiBase.value.trim());
+      const localHost = ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+      if (!/^https?:$/.test(parsed.protocol) || (parsed.protocol !== "https:" && !localHost)) throw new Error("请使用 HTTPS API 地址；只有 localhost 可以使用 HTTP。");
+      if (parsed.username || parsed.password) throw new Error("API 地址里不要包含用户名或密码。");
+      parsed.hash = ""; parsed.search = "";
+      normalizedBase = parsed.toString().replace(/\/+$/, "");
+      if (!normalizedBase) throw new Error("请填写 API 地址。");
+    } catch (error) { await showModal("API 地址不正确", error?.message || "请填完整的 HTTPS API 地址。", "!"); return; }
+    try { localStorage.setItem(NETEASE_API_BASE_KEY, normalizedBase); } catch (_) {}
+    const sessionCookie = cookie.value.trim();
+    netEaseCookieWriteOnlyStorage(sessionCookie);
+    const accountUid = userId.value.trim();
+    try { if (accountUid) sessionStorage.setItem(NETEASE_UID_SESSION_KEY, accountUid); else sessionStorage.removeItem(NETEASE_UID_SESSION_KEY); } catch (_) {}
+    try {
+      const test = await requestNetEaseApi("search", { keywords:"网易云音乐", limit:1 }, { auth:false });
+      const testCode = Number(test?.code || test?.data?.code || 0);
+      if (testCode && ![200, 0].includes(testCode)) throw new Error(`搜索接口返回错误 ${testCode}`);
+    } catch (error) {
+      await showModal("API 暂时无法连接", `${error?.message || "连接失败"}
+
+请确认：地址指向 API 服务根路径；部署已完成；服务允许来自 GitHub Pages 的跨域请求。Cookie 尚未参与这次测试。`, "!");
+      return;
+    }
+    if (!sessionCookie) {
+      await showModal("网易云 API 已连通", "基础接口测试通过。现在可以在「导入」中粘贴公开歌单链接。若要读取账号内的私人歌单，需要在 Play 入口提供有效 Cookie；建议只连接你自己部署的 API。", "♫");
+      return;
+    }
+    let loginPayload = null;
+    try { loginPayload = await requestNetEaseApi("login/status", { timestamp:Date.now() }, { cookie:sessionCookie }); }
+    catch (error) {
+      await showModal("API 已连通，但登录态验证失败", `${error?.message || "无法验证 Cookie"}
+
+可能是 Cookie 已失效，或当前 API 部署版本不接受 POST 请求体中的 Cookie。若已点击「保存 Cookie」，它仍保存在此浏览器中；否则只保存在当前会话。`, "!");
+      return;
+    }
+    const profile = netEaseProfileFromPayload(loginPayload);
+    const account = loginPayload?.data?.account || loginPayload?.account || loginPayload?.data?.data?.account || null;
+    const detectedUid = String(profile?.userId || profile?.user_id || account?.id || getNetEaseSessionUid() || "");
+    if (!detectedUid) {
+      await showModal("API 已连通，尚未识别账号", "Cookie 请求已发送，但登录状态接口没有返回用户 ID。请确认 Cookie 有效，或在 Play 连接面板填写网易云用户 ID 后重试。", "♫");
+      return;
+    }
+    try { sessionStorage.setItem(NETEASE_UID_SESSION_KEY, detectedUid); } catch (_) {}
+    let userPlaylists;
+    try {
+      const playlistPayload = await requestNetEaseApi("user/playlist", { uid:detectedUid, limit:1000, offset:0 }, { cookie:sessionCookie });
+      userPlaylists = netEasePlaylistArrayFromPayload(playlistPayload);
+      if (!userPlaylists.length) throw new Error("账号歌单接口没有返回列表。请检查 Cookie 是否能访问该账号的歌单。");
+    } catch (error) {
+      await showModal("登录状态已识别，但读取歌单失败", `${error?.message || "无法读取账号歌单"}
+
+请确认 API 支持 /user/playlist，并且这份 Cookie 有效。你仍然可以通过「导入」添加公开歌单。`, "!");
+      return;
+    }
+    const playlistModal = showModal("选择要导入的网易云歌单", `已读取到 ${userPlaylists.length} 个歌单。选择一个歌单后会把曲目信息导入 Retro Otome。`, "♫", { confirm:true, okText:"读取并导入" });
+    const playlistExtra = $("#modal-extra"); playlistExtra.replaceChildren();
+    const playlistLabel = document.createElement("label"); playlistLabel.className = "music-playlist-field";
+    const playlistCaption = document.createElement("span"); playlistCaption.textContent = "账号歌单";
+    const playlistSelect = document.createElement("select"); playlistSelect.className = "music-playlist-input";
+    userPlaylists.forEach(item => { const option = document.createElement("option"); option.value = String(item.id); option.textContent = `${item.name || "未命名歌单"}（${Number(item.trackCount || item.track_count || item.tracks?.length || 0)} 首）`; playlistSelect.append(option); });
+    const preferred = userPlaylists.find(item => /我喜欢的音乐|喜欢的音乐/.test(item.name || ""));
+    if (preferred) playlistSelect.value = String(preferred.id);
+    playlistLabel.append(playlistCaption, playlistSelect); playlistExtra.append(playlistLabel);
+    const acceptedPlaylist = await playlistModal;
+    if (!acceptedPlaylist) return;
+    const selectedMeta = userPlaylists.find(item => String(item.id) === playlistSelect.value);
+    if (!selectedMeta) return;
+    let imported;
+    try { imported = await readNetEasePlaylist(selectedMeta.id); }
+    catch (error) {
+      await showModal("歌单已找到，但曲目读取失败", `${error?.message || "读取歌单详情失败"}
+
+可以稍后重试，或使用「导入」粘贴公开歌单分享链接。`, "!");
+      return;
+    }
+    const sources = safeReadMusicSources();
+    const playlistUrl = `https://music.163.com/#/playlist?id=${encodeURIComponent(selectedMeta.id)}`;
+    let source = sources.find(item => item.platform === "网易云音乐" && String(item.playlistId) === String(selectedMeta.id));
+    if (!source) { source = { id:uid(), platform:"网易云音乐", name:imported.name || selectedMeta.name || "网易云歌单", url:playlistUrl, playlistId:String(selectedMeta.id) }; sources.push(source); }
+    source.platform = "网易云音乐"; source.name = imported.name || selectedMeta.name || source.name || "网易云歌单"; source.url = playlistUrl; source.playlistId = String(selectedMeta.id);
+    source.tracks = dedupeMusicTracks(imported.tracks); source.importedAt = Date.now();
+    writeMusicSources(sources); activateMusicPlaylist(source);
+    await showModal("网易云歌单导入完成", `「${source.name}」已导入，共 ${source.tracks.length} 首歌曲。选中歌曲后会尝试获取在线歌词；播放资源仍取决于网易云 API、版权和账号权限。`, "♫");
+  }
+
   async function openMusicPlaylistImport() {
     setupMusicPlayer();
     const modalPromise = showModal("导入歌单", "粘贴 QQ 音乐或网易云音乐的歌单分享链接。读取成功后，这个歌单才会出现在「歌单」选择器里。", "≋", { confirm:true, okText:"读取并导入" });
     const extra = $("#modal-extra"); extra.replaceChildren();
     const addLabel = (labelText, control) => { const label = document.createElement("label"); label.className = "music-playlist-field"; const caption = document.createElement("span"); caption.textContent = labelText; label.append(caption, control); extra.append(label); };
     const platform = document.createElement("select"); platform.className = "music-playlist-input";
-    [["QQ音乐","QQ 音乐"],["网易云音乐","网易云音乐"]].forEach(([value,label]) => { const option = document.createElement("option"); option.value = value; option.textContent = label; platform.append(option); });
-    const name = document.createElement("input"); name.className = "music-playlist-input"; name.type = "text"; name.placeholder = "歌单名称，例如：我喜欢"; name.maxLength = 64; name.value = DEFAULT_QQ_PLAYLIST.name;
-    const url = document.createElement("input"); url.className = "music-playlist-input"; url.type = "url"; url.placeholder = "粘贴歌单分享链接"; url.inputMode = "url"; url.value = DEFAULT_QQ_PLAYLIST.url;
+    [["网易云音乐","网易云音乐"],["QQ音乐","QQ 音乐"]].forEach(([value,label]) => { const option = document.createElement("option"); option.value = value; option.textContent = label; platform.append(option); });
+    const name = document.createElement("input"); name.className = "music-playlist-input"; name.type = "text"; name.placeholder = "歌单名称，例如：我喜欢"; name.maxLength = 64; name.value = "网易云歌单";
+    const url = document.createElement("input"); url.className = "music-playlist-input"; url.type = "url"; url.placeholder = "粘贴网易云或 QQ 音乐歌单链接"; url.inputMode = "url"; url.value = "";
     url.addEventListener("input", () => {
       if (/music\.163\.com/i.test(url.value)) platform.value = "网易云音乐";
       else if (/y\.qq\.com|qq\.com/i.test(url.value)) platform.value = "QQ音乐";
     });
     addLabel("平台", platform); addLabel("歌单名称", name); addLabel("分享链接", url);
-    const hint = document.createElement("p"); hint.className = "music-playlist-hint"; hint.textContent = "当前已填入你刚提供的 QQ 音乐歌单链接。点击读取并导入后，会尝试加载公开歌单曲目；只有读取到歌曲列表才会保存到「歌单」选择器。"; extra.append(hint);
+    const hint = document.createElement("p"); hint.className = "music-playlist-hint"; hint.textContent = "优先使用 Play 按钮配置的网易云 API。读取成功后会保存到「歌单」选择器；私人收藏和账号歌单请从 Play 入口连接账号。"; extra.append(hint);
     const accepted = await modalPromise;
     if (!accepted) return;
     const cleanUrl = url.value.trim();
@@ -2990,7 +3268,954 @@
   }
   setupMusicPlayer();
 
-  $("#open-music-board").addEventListener("click", () => { $("#notes-home").hidden = true; $("#notes-music-board").hidden = false; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = true; renderLayout(); });
+  $("#open-music-board").addEventListener("click", () => { $("#notes-home").hidden = true; $("#notes-music-board").hidden = false; $("#notes-tamagotchi-board").hidden = true; $("#note-collection").hidden = true; $("#note-reader").hidden = true; $("#note-editor").hidden = true; renderLayout(); });
+  $("#open-tamagotchi-board").addEventListener("click", () => {
+    $("#notes-home").hidden = true;
+    $("#notes-music-board").hidden = true;
+    $("#notes-tamagotchi-board").hidden = false;
+    $("#note-collection").hidden = true;
+    $("#note-reader").hidden = true;
+    $("#note-editor").hidden = true;
+    // Recalculate persisted hatch progress and synchronize egg/chick visibility every time the board opens.
+    tamaProgressDay();
+    renderLayout();
+    tamaStartChickAnimator();
+  });
+  const TAMA_STORAGE_KEY = "retroOtomeTamagotchi_v1";
+  const TAMA_HOUR = 60 * 60 * 1000;
+  const TAMA_DAY = 24 * TAMA_HOUR;
+  const TAMA_MINUTE = 60 * 1000;
+  const tamaRandomBetween = (min, max) => min + Math.random() * (max - min);
+  const tamaLocalDateKey = (timestamp = Date.now()) => {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  };
+  const TAMA_FOODS = Object.freeze({
+    millet: { label: "小米", preference: "favorite", mood: "happy", reaction: "小鸡一看到最喜欢的小米就凑了过来，开心地啄了起来。", shortReaction: "最喜欢的小米！小鸡啄得特别起劲。" },
+    corn: { label: "玉米粒", preference: "liked", mood: "happy", reaction: "小鸡认真地啄着玉米粒，吃得很满足。", shortReaction: "玉米粒也很合小鸡的胃口。" },
+    oats: { label: "燕麦碎", preference: "liked", mood: "happy", reaction: "小鸡低头吃着燕麦碎，心情看起来不错。", shortReaction: "小鸡喜欢这份燕麦碎。" },
+    greens: { label: "绿叶菜", preference: "disliked", mood: "curious", reaction: "小鸡犹豫地看了看绿叶菜，还是慢慢吃了几口。", shortReaction: "小鸡对绿叶菜没那么热情，但还是吃了一点。" },
+    seed_mix: { label: "其他食物", preference: "neutral", mood: "curious", reaction: "小鸡正常地吃着这份食物，偶尔抬头看看你。", shortReaction: "小鸡正常地吃完了这份食物。" }
+  });
+  const TAMA_FOOD_ORDER = ["millet", "corn", "oats", "greens", "seed_mix"];
+  const tamaDefaults = () => {
+    const now = Date.now();
+    return {
+      schemaVersion: 4, careRulesVersion: 2,
+      stage: "egg", hatchCare: 0, hatchStartedAt: now, hatchedAt: 0, day: 1,
+      bond: 0, viviBond: 0, mortimerBond: 0,
+      hunger: 72, energy: 82, mood: "curious", cleanliness: 90,
+      foodMoodUntil: 0, foodMoodSource: "", lastPositiveInteractionAt: 0,
+      lastOpenedAt: now, lastHungerAt: now, lastEnergyAt: now, lastCleanlinessAt: now,
+      lastDecayAt: now, lastCleanDecayAt: now,
+      lastMortimerCareAt: 0, nextMortimerCareAt: 0, regularMortimerCareAt: 0,
+      urgentCareScheduled: false, mortimerCareCount: 0,
+      lastAmbientActionAt: 0, nextAmbientCheckAt: now + tamaRandomBetween(15, 30) * TAMA_MINUTE,
+      ambientCaption: "", ambientCaptionSub: "", ambientCaptionAt: 0,
+      feedingAffinityDate: tamaLocalDateKey(now), dailyAffinityFeedingCount: 0,
+      lastFoodChoice: "millet", lastActions: {}, restUntil: 0,
+      records: [], unlocked: [], unlockedIds: [], seenEvents: []
+    };
+  };
+  function loadTamaState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(TAMA_STORAGE_KEY) || "null");
+      const base = tamaDefaults();
+      if (!saved || typeof saved !== "object") return base;
+      const now = Date.now();
+      const state = {
+        ...base, ...saved,
+        lastActions: saved.lastActions && typeof saved.lastActions === "object" ? saved.lastActions : {},
+        records: Array.isArray(saved.records) ? saved.records : [],
+        unlocked: Array.isArray(saved.unlocked) ? saved.unlocked : [],
+        unlockedIds: Array.isArray(saved.unlockedIds) ? saved.unlockedIds : [],
+        seenEvents: Array.isArray(saved.seenEvents) ? saved.seenEvents : []
+      };
+      // Migrate existing saves in-place; preserve care values, bonds, hatch progress, records, and collections.
+      // The older build didn't reliably apply an independent cleanliness clock; begin that clock at upgrade time.
+      if (Number(saved.careRulesVersion) !== 2) {
+        state.lastCleanlinessAt = now;
+        state.lastCleanDecayAt = now;
+        state.careRulesVersion = 2;
+      }
+      state.lastHungerAt = Number(saved.lastHungerAt) || Number(saved.lastDecayAt) || Number(saved.lastOpenedAt) || now;
+      state.lastEnergyAt = Number(saved.lastEnergyAt) || Number(saved.lastDecayAt) || Number(saved.lastOpenedAt) || now;
+      if (Number(saved.careRulesVersion) === 2) state.lastCleanlinessAt = Number(saved.lastCleanlinessAt) || Number(saved.lastCleanDecayAt) || now;
+      state.lastDecayAt = state.lastHungerAt; // compatibility mirror for older builds
+      state.lastCleanDecayAt = state.lastCleanlinessAt;
+      const ribbonAlreadyOwned = state.unlocked.includes("莫蒂默的蓝丝带") || state.unlockedIds.includes("mortimer-care") || state.unlockedIds.includes("mortimer_blue_ribbon");
+      if (Number.isFinite(Number(saved.mortimerCareCount))) state.mortimerCareCount = Math.max(0, Number(saved.mortimerCareCount));
+      else if (Number.isFinite(Number(saved.mortimerFormalCareCount))) state.mortimerCareCount = Math.max(0, Number(saved.mortimerFormalCareCount));
+      else {
+        // Do not invent a care count from a truncated or ambiguous history. Only the persistent counter or ribbon unlock is authoritative.
+        state.mortimerCareCount = ribbonAlreadyOwned ? 3 : 0;
+      }
+      if (!Number.isFinite(Number(saved.hatchedAt)) || Number(saved.hatchedAt) <= 0) {
+        if (state.stage !== "egg") {
+          const stageAge = state.stage === "grown" ? 7 : state.stage === "growing" ? 3 : Math.max(0, (Number(state.day) || 1) - 1);
+          state.hatchedAt = now - stageAge * TAMA_DAY;
+        } else state.hatchedAt = 0;
+      }
+      const legacyUnlockIds = {
+        "初次见面纪念羽毛": "first-feather",
+        "第一顿小饭": "first-meal",
+        "莫蒂默的蓝丝带": "mortimer-care",
+        "整洁小窝": "tidy-nest",
+        "暖炉边的小憩": "fireplace-nap",
+        "长大一点点": "growing-portrait",
+        "成长纪念羽毛": "grown-feather",
+        "我们的雪花玻璃球": "shared-heart",
+        "冬日一家三口": "winter-family"
+      };
+      for (const label of state.unlocked) {
+        const knownId = legacyUnlockIds[label];
+        if (knownId && !state.unlockedIds.includes(knownId)) state.unlockedIds.push(knownId);
+      }
+      if (state.unlockedIds.includes("mortimer_blue_ribbon") && !state.unlockedIds.includes("mortimer-care")) state.unlockedIds.push("mortimer-care");
+      if (state.unlockedIds.includes("first_hatch_feather") && !state.unlockedIds.includes("first-feather")) state.unlockedIds.push("first-feather");
+      if (state.stage !== "egg") {
+        if (!(Number(state.lastMortimerCareAt) > 0)) state.lastMortimerCareAt = now;
+        if (!(Number(saved.regularMortimerCareAt) > 0) && Number(saved.nextMortimerCareAt) > 0) state.regularMortimerCareAt = Number(saved.nextMortimerCareAt);
+        if (!(Number(saved.nextMortimerCareAt) > 0)) {
+          const baseCareAt = Number(state.lastMortimerCareAt) || now;
+          const plannedAt = baseCareAt + tamaRandomBetween(2.5, 5) * TAMA_HOUR;
+          state.regularMortimerCareAt = plannedAt;
+          state.nextMortimerCareAt = plannedAt;
+          state.urgentCareScheduled = false;
+        }
+        if (!(Number(saved.lastAmbientActionAt) > 0)) state.lastAmbientActionAt = now;
+        if (!(Number(saved.nextAmbientCheckAt) > 0)) state.nextAmbientCheckAt = now + tamaRandomBetween(15, 30) * TAMA_MINUTE;
+      } else {
+        state.nextMortimerCareAt = 0;
+        state.regularMortimerCareAt = 0;
+      }
+      if (!saved.feedingAffinityDate) state.feedingAffinityDate = tamaLocalDateKey(now);
+      if (!Number.isFinite(Number(saved.dailyAffinityFeedingCount))) state.dailyAffinityFeedingCount = 0;
+      state.dailyAffinityFeedingCount = Math.max(0, Math.min(3, Number(state.dailyAffinityFeedingCount) || 0));
+      if (!TAMA_FOODS[state.lastFoodChoice]) state.lastFoodChoice = "millet";
+      if (!Number.isFinite(Number(saved.foodMoodUntil))) state.foodMoodUntil = 0;
+      if (typeof state.foodMoodSource !== "string") state.foodMoodSource = "";
+      if (!Number.isFinite(Number(saved.lastPositiveInteractionAt))) state.lastPositiveInteractionAt = 0;
+      state.schemaVersion = 4;
+      state.careRulesVersion = 2;
+      if (!Number.isFinite(Number(saved.mortimerCareCount))) state.mortimerCareCount = Math.max(0, Number(state.mortimerFormalCareCount) || (ribbonAlreadyOwned ? 3 : 0));
+      state.mortimerCareCount = Math.max(ribbonAlreadyOwned ? 3 : 0, Number(state.mortimerCareCount) || 0);
+      state.urgentCareScheduled = Boolean(state.urgentCareScheduled);
+      state.nextAmbientCheckAt = Number(state.nextAmbientCheckAt) || (now + tamaRandomBetween(15, 30) * TAMA_MINUTE);
+      state.lastAmbientActionAt = Number(state.lastAmbientActionAt) || 0;
+      state.lastPositiveInteractionAt = Number(state.lastPositiveInteractionAt) || 0;
+      return state;
+    } catch { return tamaDefaults(); }
+  }
+  let tamaState = loadTamaState();
+  if (tamaState.stage !== "egg" && Number(tamaState.mortimerCareCount) >= 3) tamaUnlockOnce("mortimer-care", "莫蒂默的蓝丝带");
+  const TAMA_CHICK_ASSET = "./assets/chick/";
+  const TAMA_CHICK_IDLE_SEQUENCE = [
+    { frame: 1, ms: 1050 }, { frame: 2, ms: 170 }, { frame: 1, ms: 900 },
+    { frame: 3, ms: 430 }, { frame: 4, ms: 430 }, { frame: 1, ms: 950 },
+    { frame: 5, ms: 330 }, { frame: 6, ms: 360 }, { frame: 1, ms: 850 },
+    { frame: 7, ms: 620 }, { frame: 8, ms: 320 }, { frame: 1, ms: 800 },
+  ];
+  let tamaChickMotionToken = 0;
+  let tamaChickLoopRunning = false;
+  let tamaChickReacting = false;
+  let tamaChickPosition = 64;
+  const tamaChickWaiters = new Map();
+  function tamaChickBoardIsActive() {
+    const board = $("#notes-tamagotchi-board");
+    return Boolean(board && !board.hidden && !document.hidden);
+  }
+  function tamaChickCanAnimate(token) {
+    return token === tamaChickMotionToken && tamaState.stage !== "egg" && tamaChickBoardIsActive();
+  }
+  function tamaChickDelay(ms, token) {
+    return new Promise(resolve => {
+      const id = setTimeout(() => {
+        tamaChickWaiters.delete(id);
+        resolve(token === tamaChickMotionToken);
+      }, ms);
+      tamaChickWaiters.set(id, resolve);
+    });
+  }
+  function tamaStopChickAnimator() {
+    tamaChickMotionToken += 1;
+    tamaChickLoopRunning = false;
+    tamaChickReacting = false;
+    for (const [id, resolve] of tamaChickWaiters) {
+      clearTimeout(id);
+      resolve(false);
+    }
+    tamaChickWaiters.clear();
+  }
+  function tamaSetChickFrame(kind, index) {
+    const chick = $("#tama-hatched-chick");
+    if (!chick) return;
+    const file = `${kind}-${String(index).padStart(2, "0")}.png`;
+    if (chick.getAttribute("src") !== `${TAMA_CHICK_ASSET}${file}`) chick.setAttribute("src", `${TAMA_CHICK_ASSET}${file}`);
+    chick.dataset.frame = file.replace(".png", "");
+  }
+  function tamaSetChickPosition(position) {
+    tamaChickPosition = Math.max(55, Math.min(72, position));
+    const chick = $("#tama-hatched-chick");
+    if (chick) chick.style.left = `${tamaChickPosition}%`;
+  }
+  function tamaShowChickReaction(symbol = "♡") {
+    const effect = $("#tama-chick-reaction");
+    if (!effect) return;
+    effect.textContent = symbol;
+    effect.style.left = `${Math.min(82, tamaChickPosition + 4)}%`;
+    effect.hidden = false;
+    effect.classList.remove("is-visible");
+    void effect.offsetWidth;
+    effect.classList.add("is-visible");
+  }
+  async function tamaWalkChickTo(target, token, automatic = false) {
+    const chick = $("#tama-hatched-chick");
+    if (!chick || !tamaChickCanAnimate(token)) return false;
+    const destination = Math.max(55, Math.min(72, target));
+    chick.classList.remove("is-idle", "is-reacting");
+    chick.classList.add("is-walking");
+    chick.classList.toggle("is-facing-left", destination < tamaChickPosition);
+    tamaSetChickPosition(destination);
+    // Eight hand-drawn walk frames loop twice while CSS moves the sprite across the grass.
+    for (let step = 0; step < 16; step += 1) {
+      if (!tamaChickCanAnimate(token)) return false;
+      tamaSetChickFrame("walk", (step % 8) + 1);
+      if (!(await tamaChickDelay(110, token))) return false;
+    }
+    if (!tamaChickCanAnimate(token)) return false;
+    chick.classList.remove("is-walking", "is-facing-left");
+    chick.classList.add("is-idle");
+    tamaSetChickFrame("idle", 1);
+    if (automatic) tamaUnlockOnce("snow-footprints", "窗边的小脚印");
+    return true;
+  }
+  async function tamaPlayIdleSequence(token) {
+    const chick = $("#tama-hatched-chick");
+    if (!chick) return false;
+    chick.classList.remove("is-walking", "is-facing-left", "is-reacting");
+    chick.classList.add("is-idle");
+    if (tamaState.restUntil > Date.now()) {
+      tamaSetChickFrame("idle", 2);
+      const rested = await tamaChickDelay(1750, token);
+      return rested && tamaChickCanAnimate(token);
+    }
+    for (const pose of TAMA_CHICK_IDLE_SEQUENCE) {
+      if (!tamaChickCanAnimate(token)) return false;
+      // Keep the idle cycle gentle; the one-frame blink stays brief instead of looking like a held pose.
+      tamaSetChickFrame("idle", pose.frame);
+      const completed = await tamaChickDelay(pose.ms, token);
+      if (!completed || !tamaChickCanAnimate(token)) return false;
+    }
+    return true;
+  }
+  async function tamaChickLifeLoop(token) {
+    while (tamaChickCanAnimate(token)) {
+      const rested = tamaState.restUntil > Date.now();
+      const completed = await tamaPlayIdleSequence(token);
+      if (!completed || !tamaChickCanAnimate(token)) break;
+      if (!rested && Math.random() < 0.62) {
+        const target = tamaChickPosition > 65 ? 56 + Math.random() * 2 : 69 + Math.random() * 2;
+        const walked = await tamaWalkChickTo(target, token, true);
+        if (!walked || !tamaChickCanAnimate(token)) break;
+      }
+      const paused = await tamaChickDelay(rested ? 500 : 700 + Math.random() * 1000, token);
+      if (!paused) break;
+    }
+    if (token === tamaChickMotionToken) tamaChickLoopRunning = false;
+  }
+  function tamaStartChickAnimator() {
+    if (tamaState.stage === "egg" || !tamaChickBoardIsActive() || tamaChickLoopRunning || tamaChickReacting) return;
+    const chick = $("#tama-hatched-chick");
+    if (!chick) return;
+    tamaChickLoopRunning = true;
+    const token = ++tamaChickMotionToken;
+    if (!chick.style.left) tamaSetChickPosition(64);
+    tamaChickLifeLoop(token).catch(error => {
+      console.warn("Chick animation paused safely", error);
+      if (token === tamaChickMotionToken) tamaChickLoopRunning = false;
+    });
+  }
+  async function tamaPlayChickReaction(action = "tap") {
+    if (tamaState.stage === "egg") return;
+    tamaStopChickAnimator();
+    const token = tamaChickMotionToken;
+    const chick = $("#tama-hatched-chick");
+    if (!chick || !tamaChickBoardIsActive()) return;
+    tamaChickReacting = true;
+    chick.classList.remove("is-walking", "is-facing-left", "is-idle");
+    chick.classList.add("is-reacting");
+    const show = (frame, symbol) => { tamaSetChickFrame("idle", frame); if (symbol) tamaShowChickReaction(symbol); };
+    if (action === "feed") {
+      const selectedFood = TAMA_FOODS[tamaState.lastFoodChoice] || TAMA_FOODS.millet;
+      if (selectedFood.preference === "disliked") {
+        show(7, "…");
+        await tamaChickDelay(500, token);
+        if (token === tamaChickMotionToken) show(5, "");
+        await tamaChickDelay(400, token);
+      } else {
+        show(6, selectedFood.preference === "favorite" ? "✦" : selectedFood.preference === "liked" ? "♡" : "");
+        await tamaChickDelay(450, token);
+        if (token === tamaChickMotionToken) show(5, "");
+        await tamaChickDelay(400, token);
+      }
+    } else if (action === "pet" || action === "tap") {
+      show(2, "♡");
+      await tamaChickDelay(250, token);
+      if (token === tamaChickMotionToken) show(1, "");
+      await tamaChickDelay(450, token);
+    } else if (action === "play") {
+      tamaShowChickReaction("♪");
+      chick.classList.remove("is-reacting");
+      const out = await tamaWalkChickTo(tamaChickPosition > 64 ? 56 : 71, token);
+      if (out && tamaChickCanAnimate(token)) {
+        chick.classList.remove("is-idle"); chick.classList.add("is-reacting");
+        show(7, "♡");
+        await tamaChickDelay(420, token);
+        if (token === tamaChickMotionToken) show(8, "");
+        await tamaChickDelay(250, token);
+      }
+    } else if (action === "rest") {
+      show(2, "Z");
+      await tamaChickDelay(600, token);
+    } else if (action === "clean") {
+      show(3, "✦");
+      await tamaChickDelay(300, token);
+      if (token === tamaChickMotionToken) show(4, "");
+      await tamaChickDelay(350, token);
+      if (token === tamaChickMotionToken) show(1, "");
+    } else {
+      show(3, "♡");
+      await tamaChickDelay(300, token);
+      if (token === tamaChickMotionToken) show(1, "");
+      await tamaChickDelay(350, token);
+    }
+    if (token !== tamaChickMotionToken) return;
+    chick.classList.remove("is-reacting", "is-walking", "is-facing-left");
+    chick.classList.add("is-idle");
+    tamaChickReacting = false;
+    tamaChickLoopRunning = false;
+    tamaStartChickAnimator();
+  }
+  function tamaSetupChickAnimator() {
+    const chick = $("#tama-hatched-chick");
+    const effect = $("#tama-chick-reaction");
+    if (effect) effect.addEventListener("animationend", () => { effect.hidden = true; effect.classList.remove("is-visible"); });
+    if (chick) {
+      chick.addEventListener("click", () => { if (tamaState.stage !== "egg") tamaPlayChickReaction("tap"); });
+      chick.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (tamaState.stage !== "egg") tamaPlayChickReaction("tap"); }
+      });
+    }
+    const board = $("#notes-tamagotchi-board");
+    if (board) new MutationObserver(() => {
+      if (tamaChickBoardIsActive()) tamaStartChickAnimator();
+      else tamaStopChickAnimator();
+    }).observe(board, { attributes: true, attributeFilter: ["hidden"] });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) tamaStopChickAnimator();
+      else tamaStartChickAnimator();
+    });
+  }
+  tamaSetupChickAnimator();
+  function saveTamaState() { try { localStorage.setItem(TAMA_STORAGE_KEY, JSON.stringify(tamaState)); } catch (error) { console.warn("Tamagotchi state could not be saved", error); } }
+  const tamaNow = () => new Date().toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  function tamaRecord(actor, action, reaction, detail = "", metadata = {}) {
+    const eventId = String(metadata.id || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+    if (tamaState.seenEvents.includes(eventId)) return tamaState.records.find(record => record.id === eventId) || null;
+    const record = {
+      id: eventId, at: Number(metadata.at) || Date.now(), actor, action, title: action,
+      actionId: String(metadata.actionId || `${actor}_${action}`),
+      eventType: String(metadata.eventType || "care"), reaction, detail
+    };
+    tamaState.records.unshift(record);
+    tamaState.records = tamaState.records.slice(0, 120);
+    tamaState.seenEvents.push(eventId);
+    if (tamaState.seenEvents.length > 3000) tamaState.seenEvents = tamaState.seenEvents.slice(-3000);
+    saveTamaState(); return record;
+  }
+  function tamaUnlockOnce(id, label = id) {
+    const unlockId = String(id);
+    const visibleLabel = String(label);
+    const alreadyUnlocked = tamaState.unlockedIds.includes(unlockId) || tamaState.unlocked.includes(visibleLabel);
+    if (!tamaState.unlockedIds.includes(unlockId)) tamaState.unlockedIds.push(unlockId);
+    if (!tamaState.unlocked.includes(visibleLabel)) tamaState.unlocked.push(visibleLabel);
+    if (!alreadyUnlocked) {
+      // Collection state is stored separately from the 120-row care history cap.
+      tamaRecord("收藏柜", `解锁纪念物：${visibleLabel}`, `获得了「${visibleLabel}」。`, "收藏已永久保存。", { id: `collection-unlock-${unlockId}`, actionId: `unlock_${unlockId}`, eventType: "collection" });
+      saveTamaState();
+    }
+    return !alreadyUnlocked;
+  }
+  function tamaCheckCollectionMilestones(now = Date.now()) {
+    if (tamaState.stage === "egg") return;
+    if (tamaState.stage === "growing" || tamaState.stage === "grown") tamaUnlockOnce("growing-portrait", "长大一点点");
+    if (tamaState.stage === "grown") tamaUnlockOnce("grown-feather", "成长纪念羽毛");
+    if (Number(tamaState.bond) >= 60) tamaUnlockOnce("shared-heart", "我们的雪花玻璃球");
+    if (tamaState.stage === "grown" && Number(tamaState.bond) >= 80) tamaUnlockOnce("winter-family", "冬日一家三口");
+  }
+  function tamaSetCaption(main, sub) {
+    const mainEl = $("#tama-caption-main"), subEl = $("#tama-caption-sub");
+    if (mainEl) mainEl.textContent = main;
+    if (subEl) subEl.textContent = sub;
+  }
+  function renderTamaScene() {
+    const egg = $(".tama-main-egg"), chick = $("#tama-hatched-chick"), nest = $(".tama-egg-nest"), progress = $(".tama-pixel-progress i"), meterTitle = $(".tama-hatch-meter strong"), meterLabel = $("#tama-hatch-label"), dayLabel = $(".tama-day-label");
+    const isHatched = tamaState.stage !== "egg";
+    const shell = $(".tama-shell");
+    if (shell) shell.classList.toggle("is-hatched", isHatched);
+    if (egg) {
+      egg.hidden = isHatched;
+      egg.style.display = isHatched ? "none" : "";
+      egg.setAttribute("aria-hidden", String(isHatched));
+    }
+    if (nest) nest.classList.toggle("is-chick-bed", isHatched);
+    if (chick) {
+      chick.hidden = !isHatched;
+      const chickPose = (tamaState.restUntil > Date.now() || tamaState.mood === "sleepy") ? "sleepy" : tamaState.mood === "happy" ? "happy" : "idle";
+      chick.dataset.pose = chickPose;
+      chick.alt = chickPose === "sleepy" ? "困倦的小鸡，轻触可以逗它" : chickPose === "happy" ? "开心的像素小鸡，轻触可以逗它" : "奶黄色像素幼雏小鸡，轻触可以逗它";
+      chick.setAttribute("aria-label", chickPose === "sleepy" ? "轻轻叫醒小鸡" : "轻轻逗逗小鸡");
+      if (!isHatched) {
+        tamaStopChickAnimator();
+        chick.setAttribute("src", `${TAMA_CHICK_ASSET}idle-01.png`);
+        chick.classList.remove("is-walking", "is-facing-left", "is-reacting");
+      } else if (!tamaChickReacting) {
+        tamaStartChickAnimator();
+      }
+    }
+    const hatchProgress = Math.min(100, Number(tamaState.hatchProgress ?? tamaState.hatchCare * 15));
+    if (progress) progress.style.width = isHatched ? "100%" : `${Math.min(100, Number(tamaState.hatchProgress ?? Math.round(tamaState.hatchCare / 3 * 100)))}%`;
+    if (meterTitle) meterTitle.textContent = isHatched ? ({ chick: "幼雏期", growing: "成长期", grown: "成熟期" }[tamaState.stage] || "幼雏期") : `孵化进度 ${hatchProgress}%`;
+    if (meterLabel) meterLabel.textContent = isHatched ? "成长阶段" : "孵化进度";
+    if (dayLabel) dayLabel.innerHTML = `❄ DAY ${String(tamaState.day).padStart(2, "0")} <small>${isHatched ? "窗外飘雪，屋里暖暖的" : "窗外正在飘雪"}</small>`;
+    const recordDot = $(".tama-record-dot"); if (recordDot) recordDot.hidden = !tamaState.records.length;
+    const moodNames = { happy: "开心", sleepy: "困倦", curious: "好奇", sad: "低落" };
+    const moodValue = $("#tama-top-mood"); if (moodValue) moodValue.textContent = isHatched ? (moodNames[tamaState.mood] || "好奇") : "等待破壳";
+    const hungerLabel = $("#tama-top-hunger-label"), hungerBar = $("#tama-top-hunger-bar");
+    if (hungerLabel) hungerLabel.textContent = `饱腹度 ${tamaState.hunger}%`;
+    if (hungerBar) { hungerBar.style.width = `${tamaState.hunger}%`; hungerBar.classList.toggle("is-low", tamaState.hunger < 30); }
+    const cleanLabel = $("#tama-top-clean-label"), cleanBar = $("#tama-top-clean-bar");
+    if (cleanLabel) cleanLabel.textContent = `干净度 ${tamaState.cleanliness}%`;
+    if (cleanBar) { cleanBar.style.width = `${tamaState.cleanliness}%`; cleanBar.classList.toggle("is-low", tamaState.cleanliness < 30); }
+    const bondLabel = $("#tama-top-bond-label"), bondBar = $("#tama-top-bond-bar");
+    if (bondLabel) bondLabel.textContent = `${tamaState.bond} / 100`;
+    if (bondBar) bondBar.style.width = `${tamaState.bond}%`;
+    if (!isHatched) tamaSetCaption(tamaState.hatchCare ? "蛋壳又轻轻晃了一下。" : "啾啾？", tamaState.hatchCare ? "暖暖的，离见面又近了一点。" : "小生命正在蛋壳里慢慢长大。");
+    else {
+      const moodLines = { happy: ["啾啾！薇薇来啦！", "今天也被好好照顾着。"], sleepy: ["小鸡打了个小小的哈欠。", "休息一会儿再去探险吧。"], curious: ["小鸡正在观察这个世界。", "今天会发现什么新东西呢？"], sad: ["小鸡想安静待一会儿。", "慢慢来，也没关系。"] };
+      const line = moodLines[tamaState.mood] || moodLines.curious; tamaSetCaption(line[0], line[1]);
+    }
+    if (isHatched && tamaState.ambientCaption && Date.now() - Number(tamaState.ambientCaptionAt || 0) < 3 * 60 * 1000) {
+      tamaSetCaption(tamaState.ambientCaption, tamaState.ambientCaptionSub || "莫蒂默安静地陪在旁边。 ");
+    }
+    renderTamaQuickActions();
+  }
+  const TAMA_COOLDOWNS = { feed: 4 * TAMA_HOUR, pet: 2 * TAMA_HOUR, play: 6 * TAMA_HOUR, clean: 0, rest: 0, warm: 6 * TAMA_HOUR };
+  function tamaCooldownRemaining(action, now = Date.now()) {
+    const until = Number(tamaState.lastActions?.[action]) || 0;
+    return Math.max(0, until + (TAMA_COOLDOWNS[action] || 0) - now);
+  }
+  function tamaDuration(ms) {
+    const minutes = Math.ceil(ms / 60000);
+    if (minutes >= 60) return `${Math.floor(minutes / 60)}小时${minutes % 60 ? ` ${minutes % 60}分钟` : ""}`;
+    return `${minutes}分钟`;
+  }
+  function tamaCanAct(action, now = Date.now()) {
+    if (tamaState.stage === "egg") return action === "warm" && tamaCooldownRemaining("warm", now) === 0;
+    if (action === "warm") return false;
+    if (tamaState.restUntil > now) return false;
+    if (["feed", "pet", "play"].includes(action) && tamaCooldownRemaining(action, now) > 0) return false;
+    if (action === "play" && tamaState.energy <= 30) return false;
+    if (action === "rest" && tamaState.energy > 30) return false;
+    if (action === "clean" && tamaState.cleanliness > 30) return false;
+    if (action === "feed" && tamaState.hunger >= 90) return false;
+    return true;
+  }
+  function tamaActionAvailability(action) {
+    const now = Date.now();
+    if (tamaState.stage === "egg" && action !== "warm") return "小鸡孵化后就能解锁这项互动";
+    if (tamaState.stage !== "egg" && action === "warm") return "小鸡已经孵化啦，这项互动留给下一颗蛋";
+    if (tamaState.stage === "egg" && action === "warm") {
+      const remaining = tamaCooldownRemaining("warm", now);
+      return remaining ? `下次保暖还需 ${tamaDuration(remaining)}` : "每 6 小时可以保暖一次；累计孵化进度达到条件后破壳";
+    }
+    if (tamaState.restUntil > now) return `小鸡正在休息，约 ${tamaDuration(tamaState.restUntil - now)} 后结束`;
+    if (["feed", "pet", "play"].includes(action)) {
+      const remaining = tamaCooldownRemaining(action, now);
+      if (remaining) return `还需等待 ${tamaDuration(remaining)} 才能再次使用`;
+    }
+    if (action === "feed" && tamaState.hunger >= 90) return "小鸡已经很饱啦，等饱腹度下降一些再喂";
+    if (action === "play" && tamaState.energy <= 30) return "精力低于或等于 30%，先让小鸡休息吧";
+    if (action === "rest" && tamaState.energy > 30) return "精力降到 30% 或以下后，才能陪小鸡休息";
+    if (action === "clean" && tamaState.cleanliness > 30) return "小窝整洁度降到 30% 或以下后，再整理就好";
+    if (action === "warm") { const remaining = tamaCooldownRemaining("warm", now); if (remaining) return `下次保暖还需 ${tamaDuration(remaining)}`; }
+    return "现在可以进行这项互动";
+  }
+  function renderTamaQuickActions() {
+    const labels = { feed: "喂食", pet: "摸摸", play: "陪玩", rest: "休息", clean: "整理小窝", warm: tamaState.stage === "egg" ? "给窝保暖" : "已孵化" };
+    $$('[data-tama-quick]').forEach(button => {
+      const action = button.dataset.tamaQuick;
+      button.disabled = !tamaCanAct(action);
+      button.classList.toggle("is-available", !button.disabled);
+      const title = button.querySelector("strong"); if (title) title.textContent = labels[action] || title.textContent;
+      const hint = button.querySelector(".tama-quick-hint");
+      const availability = tamaActionAvailability(action);
+      if (hint) hint.textContent = button.disabled ? availability : (action === "warm" ? "轻轻照看蛋窝" : "可进行");
+      button.title = availability;
+    });
+  }
+
+  function tamaEnsureDailyAffinity(now = Date.now()) {
+    const today = tamaLocalDateKey(now);
+    if (tamaState.feedingAffinityDate !== today) {
+      tamaState.feedingAffinityDate = today;
+      tamaState.dailyAffinityFeedingCount = 0;
+    }
+    tamaState.dailyAffinityFeedingCount = Math.max(0, Math.min(3, Number(tamaState.dailyAffinityFeedingCount) || 0));
+  }
+  function tamaRandomizeNextCare(now = Date.now()) {
+    const next = now + tamaRandomBetween(2.5, 5) * TAMA_HOUR;
+    tamaState.regularMortimerCareAt = next;
+    tamaState.nextMortimerCareAt = next;
+    tamaState.urgentCareScheduled = false;
+  }
+  function tamaNeedsUrgentMortimerCare(now = Date.now()) {
+    const resting = Number(tamaState.restUntil) > now;
+    return tamaState.hunger <= 35 || tamaState.cleanliness <= 35 || (tamaState.energy <= 25 && !resting);
+  }
+  function tamaRefreshMortimerSchedule(now = Date.now()) {
+    if (tamaState.stage === "egg") {
+      tamaState.nextMortimerCareAt = 0;
+      tamaState.regularMortimerCareAt = 0;
+      tamaState.urgentCareScheduled = false;
+      return;
+    }
+    if (!(Number(tamaState.lastMortimerCareAt) > 0)) tamaState.lastMortimerCareAt = now;
+    if (!(Number(tamaState.regularMortimerCareAt) > 0) || !(Number(tamaState.nextMortimerCareAt) > 0)) {
+      tamaRandomizeNextCare(Math.max(now, Number(tamaState.lastMortimerCareAt) || now));
+    }
+    if (tamaNeedsUrgentMortimerCare(now)) {
+      if (!tamaState.urgentCareScheduled) {
+        const lastCare = Number(tamaState.lastMortimerCareAt) || now;
+        const urgentPlan = lastCare + tamaRandomBetween(1.5, 2.5) * TAMA_HOUR;
+        // Emergency scheduling never violates the hard 90-minute minimum interval.
+        const minAllowedAt = lastCare + 90 * TAMA_MINUTE;
+        const desiredUrgentAt = Math.max(minAllowedAt, urgentPlan);
+        const regularAt = Number(tamaState.regularMortimerCareAt) || 0;
+        tamaState.nextMortimerCareAt = regularAt > 0 ? Math.max(minAllowedAt, Math.min(regularAt, desiredUrgentAt)) : desiredUrgentAt;
+        tamaState.urgentCareScheduled = true;
+      }
+    } else if (tamaState.urgentCareScheduled) {
+      tamaState.urgentCareScheduled = false;
+      const regularAt = Number(tamaState.regularMortimerCareAt) || 0;
+      // If the old regular slot has already passed while care was deferred, create one new slot
+      // from now instead of triggering immediately on every page visit.
+      tamaState.nextMortimerCareAt = regularAt > now ? regularAt : now + tamaRandomBetween(2.5, 5) * TAMA_HOUR;
+      tamaState.regularMortimerCareAt = tamaState.nextMortimerCareAt;
+    }
+  }
+  const TAMA_AMBIENT_LINES = Object.freeze({
+    observing: [
+      ["莫蒂默在小鸡旁边停留了一会儿。", "他没有打扰它，只是安静地看着。"],
+      ["莫蒂默发现小鸡今天格外喜欢待在窝边。", "小鸡仍在认真观察周围的一切。"],
+      ["莫蒂默安静地看着小鸡四处张望。", "小小的脑袋一直忙个不停。"],
+      ["莫蒂默注意到小鸡走路比昨天稳当了一些。", "一点点成长也值得留意。"],
+      ["莫蒂默发现小鸡对窗外的雪很感兴趣。", "小小的脑袋跟着雪花轻轻转动。"]
+    ],
+    tidy: [
+      ["莫蒂默把歪掉的小垫子摆回原位。", "只是顺手整理，没有打扰小鸡。"],
+      ["莫蒂默把散落的稻草轻轻收拢。", "等小鸡回来时，小窝仍然软软的。"],
+      ["莫蒂默将小鸡的玩具放回原处。", "这样它醒来时就容易找到了。"],
+      ["莫蒂默把窝边的小物件整理得整整齐齐。", "屋子里又恢复了熟悉的秩序。"],
+      ["莫蒂默确认暖炉旁的小窝仍然暖和。", "火光很安静，小窝也很舒服。"]
+    ],
+    companionship: [
+      ["小鸡在附近踱步，莫蒂默便放慢了脚步。", "他们在暖炉边安静地待了一会儿。"],
+      ["莫蒂默陪小鸡看了一会儿窗外的雪。", "窗外很冷，屋里却暖暖的。"],
+      ["小鸡对着自己的影子看了好一会儿。", "莫蒂默没有打断它的好奇心。"],
+      ["莫蒂默没有打扰小鸡，只是安静地陪在旁边。", "有时这样就已经足够了。"],
+      ["小鸡绕了一圈，又回到了熟悉的位置。", "莫蒂默没有叫它，只给它留着空间。"]
+    ],
+    needs: [
+      ["莫蒂默发现食盆里的粮食不多了。", "他记下了下一次添粮的时间，没有提前喂食。"],
+      ["莫蒂默注意到小鸡开始犯困。", "他把玩具放到一旁，没有再逗它。"],
+      ["莫蒂默发现窝边有些凌乱。", "等小鸡醒来或走开后再整理会更合适。"],
+      ["莫蒂默注意到小鸡今天安静了许多。", "他决定再观察一会儿，不急着打扰它。"],
+      ["莫蒂默把小鸡最近喜欢的玩具放在容易找到的位置。", "等它想玩的时候，就能自己发现了。"]
+    ],
+    rest: [
+      ["莫蒂默确认小鸡睡得很安稳。", "他轻轻理好窝边的软垫，没有叫醒它。"],
+      ["暖炉里的火光轻轻跳动。", "莫蒂默没有打扰正在休息的小鸡。"]
+    ]
+  });
+  function tamaAmbientTextForState() {
+    if (Number(tamaState.restUntil) > Date.now() || tamaState.mood === "sleepy") return TAMA_AMBIENT_LINES.rest;
+    if (tamaState.hunger <= 60) return TAMA_AMBIENT_LINES.needs;
+    if (tamaState.cleanliness <= 60) return TAMA_AMBIENT_LINES.tidy;
+    if (tamaState.energy <= 40) return TAMA_AMBIENT_LINES.needs;
+    if (tamaState.cleanliness <= 80) return TAMA_AMBIENT_LINES.tidy;
+    if (Math.random() < 0.45) return TAMA_AMBIENT_LINES.companionship;
+    return TAMA_AMBIENT_LINES.observing;
+  }
+  function tamaMaybeAmbientAction(now = Date.now()) {
+    if (!tamaChickBoardIsActive() || tamaState.stage === "egg") return false;
+    if (now - (Number(tamaState.lastMortimerCareAt) || 0) < 5 * TAMA_MINUTE) return false;
+    if (now - (Number(tamaState.lastAmbientActionAt) || 0) < 30 * TAMA_MINUTE) return false;
+    if (now < (Number(tamaState.nextAmbientCheckAt) || 0)) return false;
+    // A single persisted check per scheduled window. Closed-page time never creates a backlog of ambient events.
+    const chance = tamaRandomBetween(0.25, 0.35);
+    const triggered = Math.random() < chance;
+    if (triggered) {
+      const options = tamaAmbientTextForState();
+      const line = options[Math.floor(Math.random() * options.length)];
+      tamaState.ambientCaption = line[0];
+      tamaState.ambientCaptionSub = line[1];
+      tamaState.ambientCaptionAt = now;
+      tamaState.lastAmbientActionAt = now;
+      tamaState.nextAmbientCheckAt = now + tamaRandomBetween(30, 50) * TAMA_MINUTE;
+    } else {
+      tamaState.nextAmbientCheckAt = now + tamaRandomBetween(15, 30) * TAMA_MINUTE;
+    }
+    saveTamaState();
+    return triggered;
+  }
+  function tamaDeferMortimerCare(now, retryAt, keepUrgent = false) {
+    const retry = Math.max(now + 30 * TAMA_MINUTE, Number(retryAt) || 0);
+    tamaState.nextMortimerCareAt = retry;
+    if (!keepUrgent) {
+      tamaState.urgentCareScheduled = false;
+      tamaState.regularMortimerCareAt = retry;
+    }
+    saveTamaState();
+  }
+  function tamaPerformMortimerCare(now = Date.now()) {
+    if (!tamaChickBoardIsActive() || tamaState.stage === "egg") return false;
+    tamaRefreshMortimerSchedule(now);
+    if (now < Number(tamaState.nextMortimerCareAt || 0)) return false;
+    const lastCareAt = Number(tamaState.lastMortimerCareAt) || now;
+    if (now - lastCareAt < 90 * TAMA_MINUTE) {
+      tamaDeferMortimerCare(now, lastCareAt + 90 * TAMA_MINUTE, Boolean(tamaState.urgentCareScheduled));
+      return false;
+    }
+    // Never interrupt an active rest or a visibly sleepy chick. Store a real retry time.
+    if (Number(tamaState.restUntil) > now) {
+      tamaDeferMortimerCare(now, Math.max(Number(tamaState.restUntil) || 0, now + tamaRandomBetween(30, 60) * TAMA_MINUTE), Boolean(tamaState.urgentCareScheduled));
+      tamaState.ambientCaption = "莫蒂默看见小鸡困了，便把声音放轻，没有打扰它。";
+      tamaState.ambientCaptionSub = "等它休息好，再陪它做别的事。";
+      tamaState.ambientCaptionAt = now;
+      tamaState.lastAmbientActionAt = now;
+      tamaState.nextAmbientCheckAt = now + tamaRandomBetween(30, 50) * TAMA_MINUTE;
+      saveTamaState();
+      return false;
+    }
+    const feedRemaining = tamaCooldownRemaining("feed", now);
+    if (tamaState.hunger <= 60 && feedRemaining > 0) {
+      const line = ["莫蒂默发现食盆里的粮食不多了。", "他记下了下一次添粮的时间，没有绕过喂食间隔。"];
+      tamaState.ambientCaption = line[0]; tamaState.ambientCaptionSub = line[1]; tamaState.ambientCaptionAt = now;
+      // Retry no earlier than both a gentle pause and the actual food cooldown expiry.
+      tamaDeferMortimerCare(now, Math.max(now + tamaRandomBetween(30, 60) * TAMA_MINUTE, now + feedRemaining), Boolean(tamaState.urgentCareScheduled));
+      tamaState.lastAmbientActionAt = now;
+      tamaState.nextAmbientCheckAt = now + tamaRandomBetween(30, 50) * TAMA_MINUTE;
+      saveTamaState();
+      return false;
+    }
+
+    let actionId = "mortimer_companion";
+    let action = "陪小鸡安静地待了一会儿";
+    let reaction = "小鸡认出了熟悉的脚步声，抬起脑袋看了看莫蒂默。";
+    let detail = "心情调整为开心；没有改变饱腹度、精力或整洁度。";
+    let reactionKind = "companion";
+    if (tamaState.hunger <= 60 && feedRemaining === 0) {
+      const food = TAMA_FOODS.millet;
+      const before = tamaState.hunger;
+      tamaState.hunger = Math.min(100, tamaState.hunger + 25);
+      tamaState.lastActions.feed = now; // Mortimer's real feeding respects and starts the shared 4-hour cooldown.
+      tamaState.lastFoodChoice = "millet";
+      tamaState.foodMoodUntil = now + 60 * TAMA_MINUTE;
+      tamaState.foodMoodSource = "favorite";
+      tamaState.mood = food.mood;
+      tamaUnlockOnce("first-meal", "第一顿小饭");
+      actionId = "mortimer_feed"; action = "替小鸡添好小米"; reaction = food.reaction;
+      detail = `饱腹度 ${before}% → ${tamaState.hunger}% · 食物：${food.label} · 正式照料`;
+      reactionKind = "feed";
+    } else if (tamaState.cleanliness <= 50) {
+      const before = tamaState.cleanliness;
+      tamaState.cleanliness = Math.min(100, tamaState.cleanliness + 30);
+      tamaState.lastCleanlinessAt = now;
+      tamaState.lastCleanDecayAt = now;
+      tamaState.mood = "curious";
+      tamaUnlockOnce("tidy-nest", "整洁小窝");
+      actionId = "mortimer_clean"; action = "整理了小鸡的小窝";
+      reaction = "小鸡在重新铺好的软垫上转了一圈，找了个舒服的位置。";
+      detail = `整洁度 ${before}% → ${tamaState.cleanliness}% · 正式照料`;
+      reactionKind = "clean";
+    } else if (tamaState.energy <= 40) {
+      if (tamaState.energy <= 30) {
+        tamaState.restUntil = now + 30 * TAMA_MINUTE;
+        tamaState.mood = "sleepy";
+        actionId = "mortimer_settle_for_rest"; action = "把小鸡安顿进小窝休息";
+        reaction = "莫蒂默把小鸡安顿好，让它安心休息半小时。";
+        detail = `精力保持 ${tamaState.energy}%；未直接修改精力，启动 30 分钟休息流程 · 正式照料`;
+        reactionKind = "rest";
+      } else {
+        const before = tamaState.energy;
+        tamaState.energy = Math.min(100, tamaState.energy + 20);
+        tamaState.mood = "happy";
+        actionId = "mortimer_quiet_care"; action = "陪小鸡安静地缓一会儿";
+        reaction = "莫蒂默陪小鸡安静待了一会儿，它看起来精神了些。";
+        detail = `精力 ${before}% → ${tamaState.energy}% · 正式照料`;
+        reactionKind = "companion";
+      }
+    } else {
+      const oldMood = tamaState.mood;
+      tamaState.mood = "happy";
+      actionId = "mortimer_companion"; action = "陪小鸡安静地待了一会儿";
+      reaction = "小鸡认出了熟悉的脚步声，往莫蒂默那边挪了几步。";
+      detail = `心情 ${oldMood} → happy；没有改变饱腹度、精力或整洁度 · 正式照料`;
+    }
+
+    // Formal care is an atomic, de-duplicated event: effect, relationship reward, count, schedule, then record.
+    tamaState.lastMortimerCareAt = now;
+    tamaState.mortimerCareCount = Math.max(0, Number(tamaState.mortimerCareCount) || 0) + 1;
+    tamaState.bond = Math.min(100, tamaState.bond + 1);
+    tamaState.mortimerBond = Math.min(100, tamaState.mortimerBond + 1);
+    tamaState.lastPositiveInteractionAt = now;
+    tamaResolveMood(now);
+    tamaRandomizeNextCare(now);
+    const careEventId = `mortimer-formal-${now}-${tamaState.mortimerCareCount}`;
+    tamaRecord("莫蒂默", action, reaction, `${detail} · 亲密度奖励 +1`, { id: careEventId, at: now, actionId, eventType: "formal-care" });
+    if (tamaState.mortimerCareCount >= 3) tamaUnlockOnce("mortimer-care", "莫蒂默的蓝丝带");
+    tamaCheckCollectionMilestones(now);
+    if (tamaState.ambientCaptionAt < now - 3 * 60 * 1000) {
+      tamaState.ambientCaption = "莫蒂默在小鸡身边照看了一会儿。";
+      tamaState.ambientCaptionSub = reaction;
+      tamaState.ambientCaptionAt = now;
+    }
+    saveTamaState();
+    if (tamaChickBoardIsActive()) tamaPlayChickReaction(reactionKind);
+    return true;
+  }
+  function tamaResolveMood(now = Date.now()) {
+    if (tamaState.stage === "egg") { tamaState.mood = "curious"; return tamaState.mood; }
+    if (Number(tamaState.restUntil) > now) { tamaState.mood = "sleepy"; return tamaState.mood; }
+    if (tamaState.energy <= 15 || tamaState.hunger <= 15) { tamaState.mood = "sad"; return tamaState.mood; }
+    if (Number(tamaState.foodMoodUntil) > now && ["favorite", "liked"].includes(tamaState.foodMoodSource)) {
+      tamaState.mood = "happy"; return tamaState.mood;
+    }
+    if (Number(tamaState.lastPositiveInteractionAt) > 0 && now - Number(tamaState.lastPositiveInteractionAt) < 30 * TAMA_MINUTE) {
+      tamaState.mood = "happy"; return tamaState.mood;
+    }
+    if (tamaState.energy <= 30) tamaState.mood = "sleepy";
+    else if (tamaState.hunger <= 30 || tamaState.cleanliness <= 30) tamaState.mood = "sad";
+    else tamaState.mood = "curious";
+    return tamaState.mood;
+  }
+  function tamaProgressDay() {
+    const now = Date.now();
+    const lastHungerAt = Number(tamaState.lastHungerAt || tamaState.lastDecayAt || tamaState.lastOpenedAt) || now;
+    const hungerHours = Math.floor(Math.max(0, now - lastHungerAt) / TAMA_HOUR);
+    if (hungerHours > 0) {
+      tamaState.hunger = Math.max(0, Math.min(100, tamaState.hunger - hungerHours * 2));
+      tamaState.lastHungerAt = lastHungerAt + hungerHours * TAMA_HOUR;
+      tamaState.lastDecayAt = tamaState.lastHungerAt; // old field kept as a compatibility mirror
+    }
+    const lastEnergyAt = Number(tamaState.lastEnergyAt || tamaState.lastDecayAt || tamaState.lastOpenedAt) || now;
+    const energyHours = Math.floor(Math.max(0, now - lastEnergyAt) / TAMA_HOUR);
+    if (energyHours > 0) {
+      tamaState.energy = Math.max(0, Math.min(100, tamaState.energy - energyHours));
+      tamaState.lastEnergyAt = lastEnergyAt + energyHours * TAMA_HOUR;
+    }
+    const lastCleanlinessAt = Number(tamaState.lastCleanlinessAt || tamaState.lastCleanDecayAt || tamaState.lastOpenedAt) || now;
+    const cleanIntervals = Math.floor(Math.max(0, now - lastCleanlinessAt) / (2 * TAMA_HOUR));
+    if (cleanIntervals > 0) {
+      tamaState.cleanliness = Math.max(0, Math.min(100, tamaState.cleanliness - cleanIntervals));
+      tamaState.lastCleanlinessAt = lastCleanlinessAt + cleanIntervals * 2 * TAMA_HOUR;
+      tamaState.lastCleanDecayAt = tamaState.lastCleanlinessAt; // compatibility mirror
+    }
+    tamaEnsureDailyAffinity(now);
+
+    if (tamaState.restUntil && now >= tamaState.restUntil) {
+      const completedRestUntil = Number(tamaState.restUntil);
+      tamaState.energy = Math.min(100, tamaState.energy + 35);
+      tamaState.lastEnergyAt = now;
+      tamaState.restUntil = 0;
+      tamaState.mood = "happy";
+      tamaState.lastPositiveInteractionAt = 0;
+      tamaRecord("系统", "小鸡休息结束", "小鸡伸了个懒腰，恢复了一些精力。", "休息时长约 30 分钟", { id: `rest-finished-${completedRestUntil}`, at: now, actionId: "rest_complete", eventType: "system" });
+      tamaUnlockOnce("fireplace-nap", "暖炉边的小憩");
+    }
+
+    // Real-time hatching: 24 hours of natural incubation, plus a capped bonus from warming.
+    if (tamaState.stage === "egg") {
+      const elapsedEgg = Math.max(0, now - (Number(tamaState.hatchStartedAt) || now));
+      const timeProgress = Math.min(100, elapsedEgg / TAMA_DAY * 100);
+      const careProgress = Math.min(45, (Number(tamaState.hatchCare) || 0) * 15);
+      tamaState.hatchProgress = Math.min(100, Math.round(timeProgress + careProgress));
+      if (tamaState.hatchProgress >= 100) {
+        tamaState.stage = "chick";
+        tamaState.hatchedAt = now;
+        tamaState.day = 1;
+        tamaState.mood = "happy";
+        tamaState.lastMortimerCareAt = now;
+        tamaState.lastAmbientActionAt = now;
+        tamaState.nextAmbientCheckAt = now + tamaRandomBetween(15, 30) * TAMA_MINUTE;
+        tamaRandomizeNextCare(now);
+        tamaUnlockOnce("first-feather", "初次见面纪念羽毛");
+        tamaRecord("薇薇 & 莫蒂默", "迎接小鸡孵化", "蛋壳裂开，小鸡终于来到你们身边了！", "成长纪念 · 初次见面", { actionId: "hatch_complete", eventType: "milestone" });
+      }
+    }
+    if (tamaState.stage !== "egg") {
+      if (!(Number(tamaState.hatchedAt) > 0)) tamaState.hatchedAt = now;
+      const priorStage = tamaState.stage;
+      const ageMs = Math.max(0, now - Number(tamaState.hatchedAt));
+      // Day counter follows the original egg start; growth stages follow time since hatching.
+      tamaState.day = Math.max(1, 1 + Math.floor(Math.max(0, now - (Number(tamaState.hatchStartedAt) || tamaState.hatchedAt)) / TAMA_DAY));
+      tamaState.stage = ageMs >= 7 * TAMA_DAY ? "grown" : ageMs >= 3 * TAMA_DAY ? "growing" : "chick";
+      if (tamaState.stage !== priorStage && (tamaState.stage === "growing" || tamaState.stage === "grown")) {
+        const stageLabel = tamaState.stage === "grown" ? "小鸡进入成熟期" : "小鸡进入成长期";
+        tamaRecord("薇薇 & 莫蒂默", stageLabel, tamaState.stage === "grown" ? "小鸡已经长成了更稳当的模样。" : "小鸡的步伐和好奇心都比以前更明显了。", `成长阶段 · DAY ${tamaState.day}`, { id: `growth-stage-${tamaState.stage}-${tamaState.hatchedAt}`, actionId: `stage_${tamaState.stage}`, eventType: "milestone" });
+      }
+      tamaResolveMood(now);
+      tamaCheckCollectionMilestones(now);
+      tamaRefreshMortimerSchedule(now);
+      // At most one formal care event per synchronization, with no offline catch-up queue.
+      tamaPerformMortimerCare(now);
+      tamaMaybeAmbientAction(now);
+    }
+    tamaState.lastOpenedAt = now;
+    saveTamaState();
+    renderTamaScene();
+  }
+  function tamaAction(action, foodId = null) {
+    const now = Date.now();
+    if (!tamaCanAct(action, now)) return tamaActionAvailability(action);
+    if (action === "warm") {
+      if (tamaState.stage !== "egg") return "小鸡已经孵化啦，可以开始日常照顾了。";
+      tamaState.hatchCare += 1;
+      tamaState.lastActions.warm = now;
+      tamaState.viviBond = Math.min(100, tamaState.viviBond + 1);
+      tamaState.bond = Math.min(100, tamaState.bond + 1);
+      tamaState.hatchProgress = Math.min(100, Math.round((now - tamaState.hatchStartedAt) / TAMA_DAY * 100 + Math.min(45, tamaState.hatchCare * 15)));
+      tamaRecord("薇薇", "轻轻给蛋窝保暖", "蛋壳里面传来了轻轻的动静。", `孵化照顾 ${tamaState.hatchCare} 次 · 进度 ${tamaState.hatchProgress}%`, { actionId: "warm_egg", eventType: "user-care" });
+      if (tamaState.hatchProgress >= 100) {
+        tamaState.stage = "chick";
+        tamaState.hatchedAt = now;
+        tamaState.day = 1;
+        tamaState.mood = "happy";
+        tamaState.lastMortimerCareAt = now;
+        tamaState.lastAmbientActionAt = now;
+        tamaState.nextAmbientCheckAt = now + tamaRandomBetween(15, 30) * TAMA_MINUTE;
+        tamaRandomizeNextCare(now);
+        tamaUnlockOnce("first-feather", "初次见面纪念羽毛");
+        tamaRecord("薇薇 & 莫蒂默", "迎接小鸡孵化", "咔嚓——小鸡终于来到你们身边了！", "成长纪念 · 初次见面", { actionId: "hatch_complete", eventType: "milestone" });
+      }
+      saveTamaState(); renderTamaScene();
+      return tamaState.stage === "egg" ? `你轻轻给蛋窝保暖。当前孵化进度 ${tamaState.hatchProgress || 0}%。下次保暖请等待 6 小时。` : "咔嚓——小鸡孵化啦！欢迎来到薇薇和莫蒂默的家。";
+    }
+    if (tamaState.stage === "egg") return "小鸡还在蛋里呢，先轻轻给蛋窝保暖吧。";
+    const actions = {
+      feed: {
+        actor: "薇薇", action: "给小鸡喂食", actionId: "vivi_feed",
+        update: () => {
+          const selectedFood = TAMA_FOODS[foodId] || TAMA_FOODS.millet;
+          tamaEnsureDailyAffinity(now);
+          const affinityGranted = tamaState.dailyAffinityFeedingCount < 3;
+          const before = tamaState.hunger;
+          tamaState.hunger = Math.min(100, tamaState.hunger + 30);
+          tamaState.lastActions.feed = now;
+          tamaState.lastFoodChoice = TAMA_FOOD_ORDER.includes(foodId) ? foodId : "millet";
+          tamaState.mood = selectedFood.mood;
+          const moodDuration = selectedFood.preference === "favorite" ? 60 * TAMA_MINUTE : selectedFood.preference === "liked" ? 30 * TAMA_MINUTE : 0;
+          tamaState.foodMoodUntil = moodDuration ? now + moodDuration : 0;
+          tamaState.foodMoodSource = moodDuration ? selectedFood.preference : "";
+          if (affinityGranted) {
+            tamaState.dailyAffinityFeedingCount += 1;
+            tamaState.bond = Math.min(100, tamaState.bond + 1);
+            tamaState.viviBond = Math.min(100, tamaState.viviBond + 1);
+          }
+          const rewardText = affinityGranted ? `共同亲密度 +1、薇薇亲密度 +1（今日奖励 ${tamaState.dailyAffinityFeedingCount}/3）` : "今日普通喂食亲密度奖励已达上限；进食和心情反馈正常生效";
+          const moodText = moodDuration ? `心情加成持续 ${moodDuration / TAMA_MINUTE} 分钟` : "普通反应，不附加心情加成";
+          return { reaction: selectedFood.reaction, detail: `食物：${selectedFood.label} · 偏好：${({favorite:"最喜欢",liked:"普通喜欢",disliked:"不太喜欢",neutral:"普通反应"})[selectedFood.preference]} · 饱腹度 ${before}% → ${tamaState.hunger}% · ${moodText} · ${rewardText}` };
+        }
+      },
+      pet: { actor: "薇薇", action: "轻轻摸摸小鸡", actionId: "vivi_pet", update: () => { tamaState.bond = Math.min(100, tamaState.bond + 1); tamaState.viviBond = Math.min(100, tamaState.viviBond + 1); tamaState.mood = "happy"; tamaState.lastActions.pet = now; return { reaction: "小鸡舒服地眯起眼睛，往手心靠了靠。", detail: "摸摸冷却 · 2 小时 · 亲密度奖励 +1" }; } },
+      play: { actor: "薇薇", action: "陪小鸡玩耍", actionId: "vivi_play", update: () => { tamaState.energy = Math.max(0, tamaState.energy - 18); tamaState.hunger = Math.max(0, tamaState.hunger - 5); tamaState.bond = Math.min(100, tamaState.bond + 2); tamaState.viviBond = Math.min(100, tamaState.viviBond + 2); tamaState.mood = "happy"; tamaState.lastActions.play = now; return { reaction: "小鸡蹦蹦跳跳，玩得特别开心！", detail: "陪玩冷却 · 6 小时 · 消耗精力 18、饱腹度 5 · 亲密度奖励 +2" }; } },
+      clean: { actor: "薇薇", action: "整理小鸡的小窝", actionId: "vivi_clean", update: () => { const before = tamaState.cleanliness; tamaState.cleanliness = 100; tamaState.lastCleanlinessAt = now; tamaState.lastCleanDecayAt = now; tamaState.mood = "curious"; return { reaction: "小鸡在干净柔软的小窝里开心地转了一圈。", detail: `整洁度 ${before}% → 100%` }; } },
+      rest: { actor: "薇薇", action: "陪小鸡休息", actionId: "vivi_rest", update: () => { tamaState.restUntil = now + 30 * TAMA_MINUTE; tamaState.mood = "sleepy"; return { reaction: "小鸡缩成一团，安心地休息了半小时。", detail: "休息时长 · 30 分钟；结束后恢复精力 35" }; } }
+    };
+    const selected = actions[action]; if (!selected) return "小鸡歪了歪脑袋。";
+    const result = selected.update();
+    const reaction = result && typeof result === "object" ? result.reaction : "小鸡歪了歪脑袋。";
+    const detail = result && typeof result === "object" ? result.detail : "";
+    if (action === "feed") tamaUnlockOnce("first-meal", "第一顿小饭");
+    if (action === "clean") tamaUnlockOnce("tidy-nest", "整洁小窝");
+    if (action === "pet" || action === "play") tamaState.lastPositiveInteractionAt = now;
+    tamaResolveMood(now);
+    tamaCheckCollectionMilestones(now);
+    tamaRefreshMortimerSchedule(now);
+    tamaRecord(selected.actor, selected.action, reaction, detail, { actionId: selected.actionId, eventType: "user-care" });
+    tamaPlayChickReaction(action);
+    saveTamaState(); renderTamaScene();
+    if (action === "feed" && result && typeof result === "object") return `${reaction} ${result.detail}`;
+    return reaction;
+  }
+  $$('[data-tama-quick]').forEach(button => button.addEventListener("click", () => {
+    const action = button.dataset.tamaQuick;
+    const message = tamaCanAct(action) ? tamaAction(action, action === "feed" ? "millet" : null) : tamaActionAvailability(action);
+    saveTamaState();
+    renderTamaScene();
+    const feedback = $("#tama-quick-feedback");
+    if (feedback) { feedback.textContent = message; feedback.hidden = false; }
+  }));
+
+  const tamaPanelBackdrop = $("#tama-panel-backdrop");
+  function tamaButton(action, label) { const allowed = tamaCanAct(action); const hint = tamaActionAvailability(action); return `<button type="button" class="tama-action-btn" data-tama-action="${action}" ${allowed ? "" : "disabled"} title="${hint.replace(/"/g, "&quot;")}">${label}</button><small class="tama-action-hint">${hint}</small>`; }
+  function renderTamaPanel(panel) {
+    const title = $("#tama-panel-title"), content = $("#tama-panel-content"), foot = $("#tama-panel-footnote");
+    const chickStage = tamaState.stage !== "egg";
+    const recordsHtml = (records, filter) => {
+      const list = records.filter(record => !filter || record.actor.includes(filter));
+      if (!list.length) return '<p class="tama-empty-record">还没有照顾记录。每次互动和莫蒂默的主动照顾都会留在这里。</p>';
+      return `<div class="tama-record-list">${list.map(record => `<article class="tama-record-item"><time>${new Date(record.at).toLocaleString("zh-CN", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false })}</time><strong>${record.actor} · ${record.action}</strong><p>${record.reaction}</p>${record.detail ? `<small>${record.detail}</small>` : ""}</article>`).join("")}</div>`;
+    };
+    const panels = {
+      status: { title: "小鸡状态", html: `<div class="tama-stat-grid"><div><small>成长阶段</small><strong>${({egg:"蛋阶段",chick:"幼雏期",growing:"成长期",grown:"成熟期"})[tamaState.stage]}</strong></div><div><small>心情</small><strong>${({happy:"开心",sleepy:"困倦",curious:"好奇",sad:"低落"})[tamaState.mood] || "好奇"}</strong></div><div><small>饱腹度</small><strong>${tamaState.hunger}%</strong></div><div><small>精力</small><strong>${tamaState.energy}%</strong></div><div><small>小窝整洁</small><strong>${tamaState.cleanliness}%</strong></div><div><small>共同亲密度</small><strong>${tamaState.bond}%</strong></div></div>${!chickStage ? `<p>蛋需要约 24 小时孵化；轻轻保暖最多可额外推进孵化进度。每 6 小时可保暖一次。当前进度 ${Math.min(100, Number(tamaState.hatchProgress ?? tamaState.hatchCare * 15))}%。</p>${tamaButton("warm","♡ 轻轻给蛋窝保暖")}` : `<p>薇薇亲密度 ${tamaState.viviBond}% · 莫蒂默亲密度 ${tamaState.mortimerBond}%</p>${tamaButton("pet","摸摸小鸡")}${tamaButton("play","陪它玩")}`}` },
+      feed: { title: "喂食时间", html: chickStage ? `<p>小鸡现在的饱腹度是 ${tamaState.hunger}%。每次喂食增加 30 饱腹度，冷却 4 小时；饱腹度达到 90% 时暂不接受喂食。</p><p class="tama-feed-affinity-count">今日已获得普通喂食亲密度奖励：${tamaState.dailyAffinityFeedingCount}/3 次。达到上限后仍可喂食，但不再获得这项奖励。</p><div class="tama-food-choice-grid">${TAMA_FOOD_ORDER.map(foodId => { const food = TAMA_FOODS[foodId]; const labels = { favorite: "最喜欢", liked: "喜欢", disliked: "不太喜欢", neutral: "普通" }; return `<button type="button" class="tama-food-choice" data-tama-action="feed" data-tama-food="${foodId}" ${tamaCanAct("feed") ? "" : "disabled"}><strong>${food.label}</strong><small>${labels[food.preference]}</small></button>`; }).join("")}</div><p class="tama-food-note">食物偏好只影响心情、动画和台词，不影响健康；小米是最喜欢的食物。</p>` : `<p>小鸡还在蛋里，先耐心孵化吧。</p>${tamaButton("warm","♡ 轻轻给蛋窝保暖")}` },
+      care: { title: "日常照顾", html: chickStage ? `<p>互动有冷却与状态门槛：摸摸每 2 小时一次，陪玩每 6 小时一次；精力 ≤30% 才能休息，休息 30 分钟；整洁度 ≤30% 才能整理小窝。</p><p>莫蒂默正式照料间隔为随机 2.5–5 小时；需求紧急时可提前，但至少间隔 90 分钟。日常小动作独立随机触发，不改变数值或亲密度。</p>${tamaButton("pet","摸摸小鸡")}${tamaButton("play","陪小鸡玩")}${tamaButton("rest","陪它休息")}${tamaButton("clean","整理小窝")}` : `<p>孵化阶段，薇薇可以轻轻给蛋窝保暖。每次照顾都会留下记录。</p>${tamaButton("warm","♡ 轻轻给蛋窝保暖")}` },
+      bond: { title: "亲密度", html: `<div class="tama-stat-grid"><div><small>共同亲密度</small><strong>${tamaState.bond}/100</strong></div><div><small>薇薇</small><strong>${tamaState.viviBond}/100</strong></div><div><small>莫蒂默</small><strong>${tamaState.mortimerBond}/100</strong></div></div><p>普通喂食每天最多 3 次获得关系奖励（当前 ${tamaState.dailyAffinityFeedingCount}/3）；达到上限后仍可正常进食。亲密度不会随时间衰减。</p>` },
+      collection: { title: "小鸡收藏柜", html: `<p>已解锁纪念：${tamaState.unlocked.length} 件</p><p>莫蒂默已完成正式照料：${Number(tamaState.mortimerCareCount) || 0}/3 次${tamaState.unlockedIds.includes("mortimer-care") || tamaState.unlocked.includes("莫蒂默的蓝丝带") ? " · 蓝丝带已收藏" : " · 累计 3 次可解锁蓝丝带"}</p><p>下次正式照料：${tamaState.stage === "egg" ? "孵化后开始安排" : new Date(Number(tamaState.nextMortimerCareAt) || Date.now()).toLocaleString("zh-CN", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false })}${tamaState.urgentCareScheduled ? " · 需求优先" : " · 常规计划"}</p>${tamaState.unlocked.length ? `<ul>${tamaState.unlocked.map(item=>`<li>${item}</li>`).join("")}</ul>` : "<p>第一件纪念物会在孵化成功时解锁。之后还可以加入小帽子、蝴蝶结和场景装饰。</p>"}` },
+      clean: { title: "整理小窝", html: chickStage ? `<p>只有小窝整洁度降到 30% 或以下时才能整理；整理后恢复到 100%。</p>${tamaButton("clean","♡ 整理小窝")}` : `<p>等小鸡孵化后，就可以整理它的小窝啦。</p>${tamaButton("warm","轻轻给蛋窝保暖")}` },
+      record: { title: "莫蒂默的照顾记录", html: `<p>记录真实保存的照顾事件，最新的排在前面。</p><div class="tama-record-filters"><button type="button" data-tama-filter="">全部</button><button type="button" data-tama-filter="莫蒂默">莫蒂默</button><button type="button" data-tama-filter="薇薇">薇薇</button></div><div id="tama-record-list-host">${recordsHtml(tamaState.records, "")}</div>` },
+      dress: { title: "装扮小鸡", html: `<p>目前孵化后会显示基础像素小鸡。孵化条件：累计经过约 24 小时，保暖互动可以额外推进进度；连续点击不会立即孵化。外观解锁会在后续扩展。</p><div class="tama-outfit-preview">🐥 <span>经典黄绒 · 莫蒂默的礼物</span></div><p>已解锁外观：${tamaState.unlocked.length ? tamaState.unlocked.join("、") : "经典黄绒"}</p>` }
+    };
+    const data = panels[panel]; if (!data) return;
+    title.textContent = data.title; content.innerHTML = data.html; foot.textContent = "VIVI & MORTIMER · LITTLE CHICK CLUB";
+    tamaPanelBackdrop.hidden = false;
+    $$('[data-tama-action]', content).forEach(button => button.addEventListener("click", () => {
+      const message = tamaAction(button.dataset.tamaAction, button.dataset.tamaFood || null);
+      saveTamaState(); renderTamaScene(); renderTamaPanel(panel);
+      // Use a compact status line rather than a second modal, keeping the pixel panel in place.
+      const notice = document.createElement("p"); notice.className = "tama-action-feedback"; notice.textContent = message;
+      const host = $("#tama-panel-content"); host.prepend(notice);
+    }));
+    $$('[data-tama-filter]', content).forEach(button => button.addEventListener("click", () => {
+      $$('[data-tama-filter]', content).forEach(item => item.classList.toggle("is-active", item === button));
+      const host = $("#tama-record-list-host"); if (host) host.innerHTML = recordsHtml(tamaState.records, button.dataset.tamaFilter);
+    }));
+  }
+  const tamaPanelCopy = { status: true, feed: true, care: true, bond: true, collection: true, clean: true, record: true, dress: true };
+  $$("[data-tama-panel]").forEach(button => button.addEventListener("click", () => { renderTamaPanel(button.dataset.tamaPanel); $("#tama-panel-close").focus(); }));
+  const closeTamaPanel = () => { if (tamaPanelBackdrop) tamaPanelBackdrop.hidden = true; };
+  $("#tama-panel-close").addEventListener("click", closeTamaPanel);
+  tamaPanelBackdrop.addEventListener("click", event => { if (event.target === tamaPanelBackdrop) closeTamaPanel(); });
+  document.addEventListener("keydown", event => { if (event.key === "Escape" && tamaPanelBackdrop && !tamaPanelBackdrop.hidden) closeTamaPanel(); });
+  tamaProgressDay();
+  // The prototype has no server/background worker. While the pet board is open, reconcile real-time state and run one persisted event check per minute.
+  window.setInterval(() => {
+    if (tamaChickBoardIsActive() && !document.hidden) tamaProgressDay();
+  }, 60 * 1000);
+
   $$(".notes-row[data-note-kind]").forEach(button => button.addEventListener("click", () => {
     const kind = button.dataset.noteKind;
     if (["letter", "diary", "all"].includes(kind)) { openNoteCollection(kind); return; }
@@ -3078,7 +4303,7 @@
   $("#import-data").addEventListener("click", () => $("#import-data-file").click());
   $("#import-data-file").addEventListener("change", event => { importJsonBackup(event.target.files?.[0]); event.target.value = ""; });
   $("#reset-data").addEventListener("click", async () => { if (await showModal("Reset local data?", "这会清除本浏览器中的 Notes、字卡、聊天记录和自定义纪念日。", "!", { confirm: true, okText: "Reset" })) { state = freshState(); saveState(); selectedDate = todayKey(); calendarYear = new Date().getFullYear(); calendarMonth = new Date().getMonth(); $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature; renderConversations(); renderCalendar(); renderSavedDay(); renderAnniversaries(); renderMe(); renderNotes(); switchTab("message"); showModal("Reset complete", "本地数据已恢复为初始 Demo 内容。", "✓"); } });
-  $("#top-action").addEventListener("click", () => { if (activeTab === "notes" && !$("#notes-music-board").hidden) { $("#notes-music-board").hidden = true; $("#notes-home").hidden = false; renderLayout(); return; } if (activeTab === "message" && inChat) openChatPreferences(); else if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes" && !$("#note-reader").hidden) { if (readingNoteId) openNoteEditor(currentNoteKind, readingNoteId); } else if (activeTab === "notes") { if (!$("#note-collection").hidden) $("#create-collection-note").click(); else $("#new-note").click(); } else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。", "✎"); });
+  $("#top-action").addEventListener("click", () => { if (activeTab === "notes" && !$("#notes-music-board").hidden) { $("#notes-music-board").hidden = true; $("#notes-home").hidden = false; renderLayout(); return; } if (activeTab === "notes" && !$("#notes-tamagotchi-board").hidden) { $("#notes-tamagotchi-board").hidden = true; $("#notes-home").hidden = false; renderLayout(); return; } if (activeTab === "message" && inChat) openChatPreferences(); else if (activeTab === "notes" && !$("#note-editor").hidden) saveNote(); else if (activeTab === "notes" && !$("#note-reader").hidden) { if (readingNoteId) openNoteEditor(currentNoteKind, readingNoteId); } else if (activeTab === "notes") { if (!$("#note-collection").hidden) $("#create-collection-note").click(); else $("#new-note").click(); } else if (activeTab === "saved") addAnniversary(); else if (activeTab === "me") showModal("Edit profile", "你可以在 Me 页面修改显示名称、签名和自定义字卡库。", "✎"); else if (activeTab === "message" && !inChat && state.hiddenContacts.length) { showHiddenContacts = !showHiddenContacts; renderConversations(); renderLayout(); } else showModal("Message", "选择一条会话即可开始聊天。", "✎"); });
 
   $("#profile-name").textContent = state.profileName; $("#profile-signature").textContent = state.signature;
   if (state.profileAvatar) { $("#profile-avatar").src = state.profileAvatar; const meAvatar = $("#me-profile-avatar"); if (meAvatar) meAvatar.src = state.profileAvatar; }
@@ -3137,48 +4362,148 @@
     nameInput.focus();
   }
   $("#add-contact-btn").addEventListener("click", openAddContactModal);
-  // Music pager is a compact view of the same Mortimer conversation and uses the shared chat/card settings.
+  // Music mini-chat uses the same conversation history and per-contact chat preferences as Messages.
+  function isMusicBoardVisible() {
+    const board = $("#notes-music-board");
+    return activeTab === "notes" && Boolean(board) && !board.hidden;
+  }
+  function isUsableMusicPagerContact(id) {
+    return Boolean(id && CONTACTS.some(contact => contact.id === id) && !state.deletedContacts.includes(id));
+  }
   function musicPagerContactId() {
-    return (CONTACTS.find(contact => /mortimer|莫蒂/i.test(contact.name)) || {}).id || activeContactId || (CONTACTS[0] || {}).id;
+    if (isUsableMusicPagerContact(musicPagerSelectedContactId)) return musicPagerSelectedContactId;
+    if (isUsableMusicPagerContact(state.musicPagerContactId)) {
+      musicPagerSelectedContactId = state.musicPagerContactId;
+      return musicPagerSelectedContactId;
+    }
+    const mortimer = CONTACTS.find(contact => /mortimer|莫蒂/i.test(contact.name) && isUsableMusicPagerContact(contact.id));
+    const fallback = mortimer || CONTACTS.find(contact => contact.id === activeContactId && isUsableMusicPagerContact(contact.id)) || CONTACTS.find(contact => isUsableMusicPagerContact(contact.id));
+    musicPagerSelectedContactId = fallback?.id || null;
+    if (musicPagerSelectedContactId) state.musicPagerContactId = musicPagerSelectedContactId;
+    return musicPagerSelectedContactId;
   }
   function renderMusicPagerChat() {
     const container = $("#music-pager-chat");
     if (!container) return;
     container.replaceChildren();
     const contactId = musicPagerContactId();
-    const messages = contactId ? (state.messages[contactId] || []).filter(message => message.text && !["call-log", "music", "voice"].includes(message.kind)).slice(-10) : [];
+    const contact = CONTACTS.find(item => item.id === contactId);
+    const recipientLabel = $("#music-recipient-label");
+    const recipientButton = $("#music-send-card");
+    if (recipientLabel) recipientLabel.textContent = `> ${contact?.name || "캐릭터 고르기"}`;
+    if (recipientButton) recipientButton.textContent = "캐릭터 고르기";
+    const messages = contactId ? (state.messages[contactId] || []).filter(message =>
+      message.text && !["call-log", "music"].includes(message.kind)
+    ).slice(-10) : [];
     if (!messages.length) {
-      const empty = document.createElement("div"); empty.className = "music-pager-empty"; empty.textContent = "여기에 메시지가 표시됩니다"; container.append(empty); return;
+      const empty = document.createElement("div");
+      empty.className = "music-pager-empty";
+      empty.textContent = contact ? `这里还没有你和「${contact.name}」的聊天记录` : "请先选择一个聊天角色";
+      container.append(empty);
+    } else {
+      messages.forEach(message => {
+        const row = document.createElement("div");
+        row.className = `message ${message.type === "sent" ? "sent" : "received"} music-pager-message-row`;
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        // Voice-enabled card replies still show their text in the mini-chat; the main chat may render them as voice bubbles.
+        bubble.textContent = message.text;
+        row.append(bubble);
+        const meta = document.createElement("div");
+        meta.className = "message-meta";
+        meta.textContent = message.time || "";
+        row.append(meta);
+        container.append(row);
+      });
     }
-    messages.forEach(message => {
-      const row = document.createElement("div"); row.className = `message ${message.type === "sent" ? "sent" : "received"} music-pager-message-row`;
-      const bubble = document.createElement("div"); bubble.className = "bubble"; bubble.textContent = message.text;
-      row.append(bubble);
-      const meta = document.createElement("div"); meta.className = "message-meta"; meta.textContent = message.time || ""; row.append(meta);
-      container.append(row);
-    });
+    if (musicPagerNotice && contactId) {
+      const notice = document.createElement("div");
+      notice.className = "music-pager-system-note";
+      notice.textContent = musicPagerNotice;
+      container.append(notice);
+    }
     container.scrollTop = container.scrollHeight;
+  }
+  function openMusicPagerContactPicker() {
+    const contacts = CONTACTS.filter(contact => isUsableMusicPagerContact(contact.id));
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay contact-modal-overlay music-contact-picker-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "选择聊天角色");
+    const card = document.createElement("div");
+    card.className = "modal-card contact-modal music-contact-picker-modal";
+    const symbol = document.createElement("div"); symbol.className = "modal-symbol"; symbol.textContent = "✉";
+    const title = document.createElement("h2"); title.textContent = "选择聊天角色";
+    const description = document.createElement("p"); description.textContent = "这里会显示该角色已有的聊天记录，并使用你为这个角色设置的聊天偏好和字卡回复规则。";
+    const list = document.createElement("div"); list.className = "music-contact-picker-list";
+    if (!contacts.length) {
+      const empty = document.createElement("div"); empty.className = "music-contact-picker-empty"; empty.textContent = "没有可选的联系人"; list.append(empty);
+    }
+    contacts.forEach(contact => {
+      const choice = document.createElement("button");
+      choice.type = "button";
+      choice.className = "music-contact-choice";
+      if (contact.id === musicPagerContactId()) choice.classList.add("is-selected");
+      const avatar = document.createElement("img"); avatar.src = contact.avatar || ""; avatar.alt = ""; avatar.loading = "lazy";
+      const copy = document.createElement("span"); copy.className = "music-contact-choice-copy";
+      const name = document.createElement("strong"); name.textContent = contact.name;
+      const preview = document.createElement("small");
+      const count = (state.messages[contact.id] || []).length;
+      preview.textContent = `${count} 条聊天记录 · 使用此角色的聊天偏好`;
+      copy.append(name, preview);
+      const mark = document.createElement("span"); mark.className = "music-contact-choice-mark"; mark.textContent = contact.id === musicPagerContactId() ? "✓" : "›";
+      choice.append(avatar, copy, mark);
+      choice.addEventListener("click", () => {
+        musicPagerSelectedContactId = contact.id;
+        state.musicPagerContactId = contact.id;
+        if (!Array.isArray(state.messages[contact.id])) state.messages[contact.id] = [];
+        musicPagerNotice = "";
+        saveState();
+        overlay.remove();
+        renderMusicPagerChat();
+      });
+      list.append(choice);
+    });
+    const actions = document.createElement("div"); actions.className = "modal-buttons music-contact-picker-actions";
+    const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "chrome-btn"; cancel.textContent = "取消";
+    cancel.addEventListener("click", () => overlay.remove());
+    actions.append(cancel);
+    card.append(symbol, title, description, list, actions);
+    overlay.append(card);
+    overlay.addEventListener("click", event => { if (event.target === overlay) overlay.remove(); });
+    $(".phone").append(overlay);
   }
   function sendMusicPagerText() {
     const input = $("#music-pager-input");
     const value = input?.value.trim(); if (!value) return;
-    const contactId = musicPagerContactId(); if (!contactId) return;
+    const contactId = musicPagerContactId(); if (!contactId) {
+      musicPagerNotice = "请先选择一个聊天角色。"; renderMusicPagerChat(); return;
+    }
     if (!state.messages[contactId]) state.messages[contactId] = [];
     const message = { id: uid(), text: value, type: "sent", status: "Delivered", time: nowTime() };
     state.messages[contactId].push(message); state.previews[contactId] = value;
-    markMessagesRead(contactId, "received"); saveState();
+    markMessagesRead(contactId, "received");
+    musicPagerNotice = "";
+    saveState();
     input.value = ""; $("#music-pager-char-count").textContent = "0 / 1200";
     renderMusicPagerChat(); renderConversations();
+    if (activeTab === "message" && inChat && activeContactId === contactId) renderMessages();
     scheduleCharacterResponse(contactId);
   }
   $("#music-pager-input")?.addEventListener("input", event => { $("#music-pager-char-count").textContent = `${event.target.value.length} / 1200`; });
   $("#music-pager-input")?.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); sendMusicPagerText(); } });
   $("#music-send-vivi")?.addEventListener("click", sendMusicPagerText);
+  $("#music-send-card")?.addEventListener("click", openMusicPagerContactPicker);
   $("#music-ask-mortimer")?.addEventListener("click", () => {
-    const contactId = musicPagerContactId(); if (!contactId) return;
-    receiveCard(contactId, getChatPreferences(contactId)); renderMusicPagerChat();
+    const contactId = musicPagerContactId(); if (!contactId) {
+      musicPagerNotice = "请先选择一个聊天角色。"; renderMusicPagerChat(); return;
+    }
+    musicPagerNotice = "";
+    receiveCard(contactId, getChatPreferences(contactId));
+    renderMusicPagerChat();
   });
-  // Keep the small music chat in sync when the shared conversation receives messages.
+  // Secondary sync hook for any shared-message renders; receive/reply handlers also render directly.
   const musicPagerObserver = new MutationObserver(() => renderMusicPagerChat());
   const mainChatMessages = $("#chat-messages"); if (mainChatMessages) musicPagerObserver.observe(mainChatMessages, { childList: true, subtree: true });
   renderMusicPagerChat();

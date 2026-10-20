@@ -170,6 +170,7 @@
         <div class="page-intro notes-page-intro"><span class="intro-glyph">✉</span><div><strong>Notes & Fragments</strong><small>little things worth keeping</small></div></div>
         <div id="notes-home">
           <button class="notes-row notes-music-row" id="open-music-board" type="button"><span class="row-icon music-row-icon">♫</span><span class="row-copy"><strong>Music / 音乐</strong><small>收藏想一起听的旋律</small></span><span class="row-arrow">›</span></button>
+          <button class="notes-row notes-tamagotchi-row" id="open-tamagotchi-board" type="button"><span class="row-icon tamagotchi-row-icon" aria-hidden="true"><svg class="tamagotchi-pixel-icon" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="2"/><rect x="6" y="4" width="12" height="2"/><rect x="4" y="6" width="16" height="4"/><rect x="3" y="10" width="18" height="6"/><rect x="4" y="16" width="16" height="3"/><rect x="7" y="19" width="10" height="2"/><rect x="9" y="21" width="6" height="1"/><rect class="pixel-egg-shine" x="7" y="7" width="2" height="2"/><rect class="pixel-egg-shine" x="6" y="10" width="2" height="3"/></svg></span><span class="row-copy"><strong>Tamagotchi / 拓麻歌子</strong><small>和莫蒂默一起养一只小鸡</small></span><span class="row-arrow">›</span></button>
           <button class="notes-row" data-note-kind="letter"><span class="row-icon">✉</span><span class="row-copy"><strong>Letters / 信件</strong><small>把没说完的话，写给某一个人</small></span><span class="row-count" id="letter-count">0</span><span class="row-arrow">›</span></button>
           <button class="notes-row" data-note-kind="diary"><span class="row-icon">▤</span><span class="row-copy"><strong>Diary / 日记</strong><small>留住今天的情绪和碎片</small></span><span class="row-count" id="diary-count">0</span><span class="row-arrow">›</span></button>
           <button class="notes-row" data-note-kind="collage"><span class="row-icon">▧</span><span class="row-copy"><strong>Card Collage / 字卡拼贴</strong><small>从收藏的句子里重新排列灵感</small></span><span class="row-count" id="collage-count">0</span><span class="row-arrow">›</span></button>
@@ -192,23 +193,23 @@
               </div>
               <div class="music-track-list" id="music-track-list" aria-label="歌曲列表，可上下滑动">
                 <div class="music-track-row is-active" data-track-title="Midnight Drive" data-track-artist="City Lights">
-                  <button type="button" class="music-track-play" aria-label="播放 Midnight Drive">▶</button>
+                  <button type="button" class="music-track-play" aria-label="播放 Midnight Drive"><svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2a1 1 0 0 1 1.52-.85l10.05 6.8a1 1 0 0 1 0 1.7l-10.05 6.8A1 1 0 0 1 8 18.8V5.2Z"/></svg></button>
                   <div class="music-track-main"><strong>Midnight Drive</strong><div class="music-mini-progress"><span style="width:23%"></span><i style="left:23%"></i></div></div>
                   <button type="button" class="music-track-save" aria-label="收藏 Midnight Drive">▣</button>
                 </div>
                 <div class="music-track-row" data-track-title="Plastic Love 2004" data-track-artist="Aqua Dreams">
-                  <button type="button" class="music-track-play" aria-label="播放 Plastic Love 2004">▶</button>
+                  <button type="button" class="music-track-play" aria-label="播放 Plastic Love 2004"><svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2a1 1 0 0 1 1.52-.85l10.05 6.8a1 1 0 0 1 0 1.7l-10.05 6.8A1 1 0 0 1 8 18.8V5.2Z"/></svg></button>
                   <div class="music-track-main"><strong>Plastic Love 2004</strong><div class="music-mini-progress"><span style="width:9%"></span><i style="left:9%"></i></div></div>
                   <span class="music-row-volume" aria-hidden="true">◖</span><input class="music-row-volume-slider" type="range" min="0" max="100" value="70" aria-label="Plastic Love 2004 音量">
                   <button type="button" class="music-track-save" aria-label="收藏 Plastic Love 2004">▣</button>
                 </div>
                 <div class="music-track-row" data-track-title="Cyber Nostalgia" data-track-artist="SOHEE Winter">
-                  <button type="button" class="music-track-play" aria-label="播放 Cyber Nostalgia">▶</button>
+                  <button type="button" class="music-track-play" aria-label="播放 Cyber Nostalgia"><svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2a1 1 0 0 1 1.52-.85l10.05 6.8a1 1 0 0 1 0 1.7l-10.05 6.8A1 1 0 0 1 8 18.8V5.2Z"/></svg></button>
                   <div class="music-track-main"><strong>Cyber Nostalgia</strong><div class="music-mini-progress"><span style="width:0%"></span><i style="left:0%"></i></div></div>
                   <button type="button" class="music-track-save" aria-label="收藏 Cyber Nostalgia">▣</button>
                 </div>
                 <div class="music-track-row" data-track-title="Blue Horizon (蓝调地平线)" data-track-artist="Vintage Wave">
-                  <button type="button" class="music-track-play" aria-label="播放 Blue Horizon">▶</button>
+                  <button type="button" class="music-track-play" aria-label="播放 Blue Horizon"><svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2a1 1 0 0 1 1.52-.85l10.05 6.8a1 1 0 0 1 0 1.7l-10.05 6.8A1 1 0 0 1 8 18.8V5.2Z"/></svg></button>
                   <div class="music-track-main"><strong>Blue Horizon (蓝调地平线)</strong><div class="music-mini-progress"><span style="width:0%"></span><i style="left:0%"></i></div></div>
                   <button type="button" class="music-track-save" aria-label="收藏 Blue Horizon">▣</button>
                 </div>
@@ -218,7 +219,7 @@
             <section class="music-middle-grid" aria-label="播放控制和正在播放">
               <nav class="music-dock" aria-label="音乐快捷入口">
                 <button type="button" class="music-dock-button"><span class="music-dock-icon home" aria-hidden="true">⌂</span><span>Home</span></button>
-                <button type="button" class="music-dock-button"><i class="music-ribbon ribbon-new">NEW</i><span class="music-dock-icon game" aria-hidden="true">✣</span><span>Play</span></button>
+                <button type="button" class="music-dock-button" id="music-dock-play" aria-label="连接网易云音乐"><i class="music-ribbon ribbon-new">NEW</i><span class="music-dock-icon game" aria-hidden="true">✣</span><span>Play</span></button>
                 <button type="button" class="music-dock-button"><i class="music-ribbon ribbon-free">FREE</i><span class="music-dock-icon video" aria-hidden="true">▣</span><span>Video</span></button>
                 <button type="button" class="music-dock-button"><span class="music-dock-icon audio" aria-hidden="true">◖))</span><span>Audio</span></button>
               </nav>
@@ -231,7 +232,7 @@
                   </div>
                   <div class="music-main-progress" id="music-main-progress" role="slider" aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><span></span><i></i></div>
                   <div class="music-player-controls">
-                    <button type="button" aria-label="静音或恢复音量" id="music-volume-toggle">◖))</button><button type="button" aria-label="上一首" id="music-previous-track">|◀</button><button type="button" aria-label="播放或暂停" id="music-main-play">▶</button><button type="button" aria-label="下一首" id="music-next-track">▶|</button><button type="button" aria-label="选择歌单" id="music-open-playlists-shortcut">≡</button>
+                    <button type="button" aria-label="静音或恢复音量" id="music-volume-toggle"><svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path d="M15 8.3a5.2 5.2 0 0 1 0 7.4M17.8 5.6a9 9 0 0 1 0 12.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><button type="button" aria-label="上一首" id="music-previous-track"><svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2v14H5zM19 5.2 8 12l11 6.8V5.2Z"/></svg></button><button type="button" aria-label="播放或暂停" id="music-main-play"><svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2a1 1 0 0 1 1.52-.85l10.05 6.8a1 1 0 0 1 0 1.7l-10.05 6.8A1 1 0 0 1 8 18.8V5.2Z"/></svg></button><button type="button" aria-label="下一首" id="music-next-track"><svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2zM5 5.2 16 12 5 18.8V5.2Z"/></svg></button><button type="button" aria-label="选择歌单" id="music-open-playlists-shortcut"><svg class="music-control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v2H4zM4 11h16v2H4zM4 17h16v2H4z"/></svg></button>
                   </div>
                 </div>
               </section>
@@ -241,9 +242,9 @@
               <article class="music-pager-window" aria-label="字卡留言面板">
                 <div class="music-pager-titlebar"><span class="music-pager-heading-symbol" aria-hidden="true">▤</span><span>메시지 &gt; SOHEE &gt; 보관 메시지</span></div>
                 <div class="music-recipient-row">
-                  <span class="music-recipient-label">&gt; Mortimer</span>
-                  <strong>BRIZE</strong>
-                  <button type="button" id="music-send-card">받는 사람</button>
+                  <span class="music-recipient-label" id="music-recipient-label">&gt; Mortimer</span>
+                  <strong id="music-recipient-channel">BRIZE</strong>
+                  <button type="button" id="music-send-card" aria-label="이 미니 채팅의 캐릭터 선택">캐릭터 고르기</button>
                 </div>
                 <div class="music-pager-frame">
                   <span class="music-pager-watermark">MORTIMER</span>
@@ -266,6 +267,116 @@
                 </div>
                 <div class="music-lyrics-footer"><span id="music-lyrics-footer-note">本地 LRC 时间轴同步 · 支持批量导入</span><button type="button" id="music-import-lyrics-button" class="music-import-lyrics-button" title="一次选择多首歌曲的 LRC 文件，自动按文件名匹配">批量导入 LRC</button><input type="file" id="music-lyrics-file" accept=".lrc,.txt,text/plain" multiple hidden><strong>SYNC</strong></div>
               </article>
+            </section>
+          </div>
+        </div>
+        <div id="notes-tamagotchi-board" class="notes-tamagotchi-board" hidden>
+          <section class="tama-shell" aria-label="Tamagotchi 小鸡电子宠物机">
+            <header class="tama-shell-heading">
+              <span class="tama-mini-chick" aria-hidden="true">
+                <svg viewBox="0 0 32 32" class="tama-pixel-art" shape-rendering="crispEdges"><rect x="13" y="2" width="3" height="3" fill="#bd741f"/><rect x="10" y="5" width="12" height="3" fill="#ffe85d"/><rect x="7" y="8" width="18" height="10" fill="#ffe85d"/><rect x="8" y="18" width="16" height="7" fill="#ffdf43"/><rect x="11" y="11" width="3" height="4" fill="#29241d"/><rect x="18" y="11" width="3" height="4" fill="#29241d"/><rect x="14" y="15" width="5" height="3" fill="#ef8a25"/><rect x="10" y="25" width="4" height="3" fill="#e9811f"/><rect x="19" y="25" width="4" height="3" fill="#e9811f"/></svg>
+              </span>
+              <div><strong>TAMAGOTCHI</strong><small>LITTLE CHICK CLUB</small></div>
+              <span class="tama-shell-sparkles" aria-hidden="true"><svg viewBox="0 0 24 24" class="tama-pixel-art"><path d="M10 1H14V7H17V10H23V14H17V17H14V23H10V17H7V14H1V10H7V7H10Z" fill="#90a6bd"/><rect x="11" y="8" width="2" height="8" fill="#eaf0f5"/><rect x="8" y="11" width="8" height="2" fill="#eaf0f5"/></svg></span>
+            </header>
+
+            <div class="tama-device-frame">
+              <nav class="tama-control-bar tama-top-controls" aria-label="小鸡状态与照顾菜单">
+                <button type="button" class="tama-control" data-tama-panel="status">
+                  <svg viewBox="0 0 32 32" class="tama-pixel-art" aria-hidden="true" shape-rendering="crispEdges"><rect x="9" y="3" width="14" height="3" fill="#d7a84a"/><rect x="5" y="6" width="22" height="17" fill="#ffe65a"/><rect x="8" y="9" width="16" height="13" fill="#fff078"/><rect x="10" y="12" width="3" height="4" fill="#29241d"/><rect x="19" y="12" width="3" height="4" fill="#29241d"/><rect x="14" y="16" width="5" height="3" fill="#ed8628"/><rect x="9" y="23" width="14" height="3" fill="#e7b946"/></svg>
+                  <span class="tama-control-label">状态</span><small class="tama-control-value" id="tama-top-mood">好奇</small>
+                </button>
+                <button type="button" class="tama-control" data-tama-panel="feed">
+                  <svg viewBox="0 0 32 32" class="tama-pixel-art" aria-hidden="true" shape-rendering="crispEdges"><rect x="6" y="15" width="20" height="3" fill="#34495c"/><rect x="8" y="18" width="16" height="6" fill="#79c8d5"/><rect x="10" y="11" width="4" height="4" fill="#b27a40"/><rect x="14" y="8" width="5" height="7" fill="#8c6036"/><rect x="19" y="12" width="4" height="3" fill="#b27a40"/><rect x="10" y="24" width="12" height="3" fill="#34495c"/></svg>
+                  <span class="tama-control-label">喂食</span><small class="tama-control-value" id="tama-top-hunger-label">饱腹度 72%</small><span class="tama-top-meter"><i id="tama-top-hunger-bar" style="width:72%"></i></span>
+                </button>
+                <button type="button" class="tama-control" data-tama-panel="care">
+                  <svg viewBox="0 0 32 32" class="tama-pixel-art" aria-hidden="true" shape-rendering="crispEdges"><rect x="11" y="4" width="10" height="3" fill="#8da8c1"/><rect x="8" y="7" width="16" height="19" fill="#fdf8ea"/><rect x="13" y="10" width="6" height="13" fill="#dc8b92"/><rect x="10" y="13" width="12" height="6" fill="#dc8b92"/><rect x="11" y="25" width="10" height="3" fill="#687f9a"/></svg>
+                  <span class="tama-control-label">照顾</span><small class="tama-control-value" id="tama-top-clean-label">干净度 90%</small><span class="tama-top-meter"><i id="tama-top-clean-bar" style="width:90%"></i></span>
+                </button>
+                <button type="button" class="tama-control" data-tama-panel="bond">
+                  <svg viewBox="0 0 32 32" class="tama-pixel-art" aria-hidden="true" shape-rendering="crispEdges"><rect x="7" y="7" width="6" height="6" fill="#e88ead"/><rect x="19" y="7" width="6" height="6" fill="#e88ead"/><rect x="4" y="10" width="6" height="8" fill="#e88ead"/><rect x="22" y="10" width="6" height="8" fill="#e88ead"/><rect x="10" y="13" width="12" height="5" fill="#e88ead"/><rect x="7" y="18" width="18" height="4" fill="#e88ead"/><rect x="10" y="22" width="12" height="4" fill="#e88ead"/><rect x="13" y="26" width="6" height="3" fill="#e88ead"/><rect x="8" y="9" width="3" height="3" fill="#f7bfd0"/></svg>
+                  <span class="tama-control-label">亲密度</span><small class="tama-control-value" id="tama-top-bond-label">0 / 100</small><span class="tama-top-meter tama-bond-meter"><i id="tama-top-bond-bar" style="width:0%"></i></span>
+                </button>
+              </nav>
+
+              <section class="tama-game-scene" aria-label="窗外飘雪、室内有暖炉和小窝的冬日小屋">
+                <div class="tama-scene-sky" aria-hidden="true"></div>
+                <div class="tama-winter-wall" aria-hidden="true"></div>
+                <div class="tama-scenery-label tama-day-label">❄ DAY 01 <small>窗外正在飘雪</small></div>
+                <div class="tama-scenery-label tama-world-label">SNOWY COTTAGE</div>
+                <div class="tama-winter-window" aria-hidden="true">
+                  <div class="tama-window-sky"></div>
+                  <i class="tama-snow-pine tama-snow-pine-a"></i><i class="tama-snow-pine tama-snow-pine-b"></i><i class="tama-snow-pine tama-snow-pine-c"></i>
+                  <div class="tama-snow-hill tama-snow-hill-back"></div><div class="tama-snow-hill tama-snow-hill-front"></div>
+                  <i class="tama-window-flake tama-window-flake-a">✦</i><i class="tama-window-flake tama-window-flake-b">✧</i><i class="tama-window-flake tama-window-flake-c">✦</i>
+                  <span class="tama-window-mullion-v"></span><span class="tama-window-mullion-h"></span>
+                </div>
+                <div class="tama-window-sill" aria-hidden="true"><i></i><b></b></div>
+                <div class="tama-wall-star tama-wall-star-a" aria-hidden="true">✧</div><div class="tama-wall-star tama-wall-star-b" aria-hidden="true">✦</div>
+                <div class="tama-fireplace" aria-hidden="true">
+                  <div class="tama-hearth-mantel"></div><div class="tama-hearth-body"><div class="tama-hearth-mouth"><i class="tama-flame tama-flame-a"></i><i class="tama-flame tama-flame-b"></i><span></span></div></div><div class="tama-hearth-base"></div>
+                </div>
+                <div class="tama-fire-glow" aria-hidden="true"></div>
+                <div class="tama-winter-floor" aria-hidden="true"></div>
+                <div class="tama-cozy-rug" aria-hidden="true"><i></i></div>
+                <div class="tama-egg-nest" aria-hidden="true"><i></i><b></b><span></span></div>
+                <svg class="tama-main-egg tama-pixel-art" viewBox="0 0 80 96" aria-hidden="true" shape-rendering="crispEdges">
+                  <path d="M40 2H49V6H57V12H64V20H70V30H74V42H77V57H73V72H66V82H56V89H45V93H31V90H20V84H12V75H7V63H4V48H7V35H12V24H19V15H27V8H35V4H40Z" fill="#c9ad66"/>
+                  <path d="M40 5H48V9H55V15H62V23H68V33H72V44H74V58H70V70H64V79H54V85H43V89H31V86H22V80H15V72H10V62H7V48H10V36H15V26H21V18H29V12H36V8H40Z" fill="#fff0bb"/>
+                  <path d="M18 25H25V18H32V14H39V18H45V25H42V31H48V36H42V43H48V49H40V55H45V62H37V67H31V61H34V54H28V48H33V42H27V36H33V30H26V28H18Z" fill="#d6ba76"/>
+                  <path d="M19 25H25V20H32V16H38V20H43V27H39V31H44V36H38V43H44V48H36V55H40V61H34V65H30V60H32V53H26V48H31V42H25V36H30V31H25V28H19Z" fill="#f8e2a0"/>
+                  <path d="M51 14H56V19H62V27H66V37H69V50H66V64H62V75H54V81H46V84H42V79H51V75H58V66H62V53H64V38H60V29H55V22H51Z" fill="#ead39a"/>
+                  <path d="M23 75H29V79H36V83H44V87H36V85H27V81H20V77Z" fill="#c9ad66"/>
+                  <path d="M30 25H36V31H31V36H36V42H30V48H36V54H31V60H36V66H31V70H27V63H31V57H25V51H30V45H25V39H30V33H26V28H30Z" fill="#fff8d5"/>
+                </svg>
+                <img class="tama-hatched-chick tama-pixel-art" id="tama-hatched-chick" src="./assets/chick/idle-01.png" alt="奶黄色像素幼雏小鸡，轻触可以逗它" role="button" tabindex="0" aria-label="轻轻逗逗小鸡" title="轻轻逗逗小鸡" draggable="false" hidden><span class="tama-chick-reaction" id="tama-chick-reaction" aria-hidden="true" hidden>♡</span>
+                <div class="tama-scene-caption" id="tama-scene-caption"><span class="tama-caption-star">✦</span><strong id="tama-caption-main">蛋壳轻轻晃动了一下。</strong><small id="tama-caption-sub">好像快要见面了。</small></div>
+              </section>
+
+              <section class="tama-hatch-meter" aria-label="孵化进度示意">
+                <div><span id="tama-hatch-label">孵化进度</span><strong>等待孵化</strong></div>
+                <div class="tama-pixel-progress"><i></i></div>
+              </section>
+
+              <nav class="tama-control-bar tama-bottom-controls" aria-label="收藏与记录菜单">
+                <button type="button" class="tama-control" data-tama-panel="collection">
+                  <svg viewBox="0 0 32 32" class="tama-pixel-art" aria-hidden="true" shape-rendering="crispEdges"><rect x="4" y="6" width="24" height="4" fill="#6d5236"/><rect x="3" y="10" width="26" height="17" fill="#e8b849"/><rect x="7" y="13" width="18" height="11" fill="#f4d775"/><rect x="13" y="14" width="6" height="7" fill="#8a693b"/><rect x="14" y="15" width="4" height="5" fill="#e9c25b"/><rect x="6" y="27" width="20" height="3" fill="#6d5236"/></svg>
+                  <span>收藏</span>
+                </button>
+                <button type="button" class="tama-control" data-tama-panel="clean">
+                  <svg viewBox="0 0 32 32" class="tama-pixel-art" aria-hidden="true" shape-rendering="crispEdges"><rect x="5" y="12" width="22" height="3" fill="#536c83"/><rect x="7" y="15" width="18" height="9" fill="#fbf6e8"/><rect x="9" y="18" width="14" height="3" fill="#9bd3dc"/><rect x="10" y="24" width="12" height="3" fill="#536c83"/><rect x="10" y="6" width="3" height="4" fill="#9bd3dc"/><rect x="18" y="3" width="3" height="5" fill="#9bd3dc"/><rect x="23" y="7" width="3" height="3" fill="#9bd3dc"/></svg>
+                  <span>清洁</span>
+                </button>
+                <button type="button" class="tama-control tama-record-button" data-tama-panel="record">
+                  <svg viewBox="0 0 32 32" class="tama-pixel-art" aria-hidden="true" shape-rendering="crispEdges"><rect x="5" y="4" width="10" height="24" fill="#b15d55"/><rect x="17" y="4" width="10" height="24" fill="#b15d55"/><rect x="7" y="6" width="8" height="20" fill="#fff7e3"/><rect x="17" y="6" width="8" height="20" fill="#fff7e3"/><rect x="13" y="7" width="6" height="3" fill="#b15d55"/><rect x="11" y="13" width="4" height="4" fill="#e88eaa"/><rect x="17" y="13" width="4" height="4" fill="#e88eaa"/><rect x="13" y="17" width="6" height="3" fill="#e88eaa"/><rect x="15" y="20" width="2" height="2" fill="#e88eaa"/></svg>
+                  <span>照顾记录</span><i class="tama-record-dot" aria-hidden="true" hidden></i>
+                </button>
+                <button type="button" class="tama-control" data-tama-panel="dress">
+                  <svg viewBox="0 0 32 32" class="tama-pixel-art" aria-hidden="true" shape-rendering="crispEdges"><rect x="3" y="8" width="8" height="8" fill="#7fa5c9"/><rect x="7" y="4" width="7" height="7" fill="#9abbe0"/><rect x="19" y="4" width="7" height="7" fill="#9abbe0"/><rect x="21" y="8" width="8" height="8" fill="#7fa5c9"/><rect x="11" y="9" width="10" height="10" fill="#b8d3eb"/><rect x="13" y="19" width="6" height="5" fill="#7294b8"/><rect x="15" y="24" width="2" height="5" fill="#7294b8"/></svg>
+                  <span>装扮</span>
+                </button>
+              </nav>
+            </div>
+            <footer class="tama-shell-footer"><span>一起把小鸡慢慢养大</span><span>VIVI &amp; MORTIMER ♡</span></footer>
+          </section>
+          <section class="tama-interaction-panel" aria-label="小鸡日常互动">
+            <header class="tama-interaction-heading"><div><strong>互动 <span>♡</span></strong><small>Little moments, every day</small></div><span class="tama-interaction-kicker">CARE & PLAY</span></header>
+            <div class="tama-quick-actions">
+              <button type="button" class="tama-quick-action" data-tama-quick="feed" data-tama-action="feed"><span class="tama-quick-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="8" y="5" width="5" height="4" fill="#d5ac68"/><rect x="13" y="8" width="6" height="4" fill="#e7c982"/><rect x="19" y="5" width="5" height="5" fill="#c89a58"/><rect x="5" y="12" width="22" height="4" fill="#566f76"/><rect x="4" y="16" width="24" height="4" fill="#83c8d1"/><rect x="7" y="20" width="18" height="4" fill="#b4e2df"/><rect x="10" y="24" width="12" height="3" fill="#5c8f99"/><rect x="10" y="10" width="4" height="3" fill="#e6c57e"/><rect x="16" y="11" width="4" height="2" fill="#be8648"/></svg></span><strong>喂食</strong><small class="tama-quick-hint">准备好粮食</small></button>
+              <button type="button" class="tama-quick-action" data-tama-quick="pet" data-tama-action="pet"><span class="tama-quick-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="8" y="3" width="4" height="12" fill="#e8b48a"/><rect x="13" y="2" width="4" height="12" fill="#f3c69e"/><rect x="18" y="4" width="4" height="11" fill="#e8b48a"/><rect x="23" y="9" width="4" height="9" fill="#e8b48a"/><rect x="7" y="14" width="5" height="5" fill="#f3c69e"/><rect x="11" y="13" width="13" height="5" fill="#f3c69e"/><rect x="5" y="17" width="5" height="7" fill="#d99b70"/><rect x="9" y="18" width="15" height="7" fill="#f3c69e"/><rect x="12" y="25" width="9" height="3" fill="#d99b70"/><rect x="9" y="15" width="3" height="3" fill="#fff0cf"/></svg></span><strong>摸摸</strong><small class="tama-quick-hint">轻轻摸摸小脑袋</small></button>
+              <button type="button" class="tama-quick-action" data-tama-quick="play" data-tama-action="play"><span class="tama-quick-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="11" y="4" width="10" height="4" fill="#e98ca2"/><rect x="7" y="8" width="18" height="4" fill="#e98ca2"/><rect x="5" y="12" width="22" height="9" fill="#dc6888"/><rect x="8" y="21" width="16" height="4" fill="#c84f73"/><rect x="12" y="25" width="8" height="3" fill="#b74768"/><rect x="11" y="9" width="4" height="4" fill="#f8b5c0"/><rect x="15" y="13" width="4" height="4" fill="#f8b5c0"/><rect x="11" y="17" width="5" height="4" fill="#f8b5c0"/><rect x="20" y="12" width="3" height="5" fill="#f5a5b6"/><rect x="22" y="26" width="5" height="3" fill="#e98ca2"/><rect x="26" y="27" width="3" height="2" fill="#e98ca2"/></svg></span><strong>陪玩</strong><small class="tama-quick-hint">一起玩一会儿</small></button>
+              <button type="button" class="tama-quick-action" data-tama-quick="rest" data-tama-action="rest"><span class="tama-quick-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="5" y="14" width="22" height="12" fill="#e7c99a"/><rect x="8" y="11" width="16" height="3" fill="#f7e7c5"/><rect x="8" y="17" width="16" height="5" fill="#b4d3d8"/><rect x="10" y="22" width="12" height="3" fill="#8fb6bf"/><rect x="18" y="3" width="8" height="3" fill="#8296a8"/><rect x="21" y="6" width="5" height="3" fill="#8296a8"/><rect x="17" y="9" width="10" height="3" fill="#8296a8"/><rect x="5" y="27" width="22" height="2" fill="#b9a47b"/></svg></span><strong>休息</strong><small class="tama-quick-hint">让小鸡歇一歇</small></button>
+              <button type="button" class="tama-quick-action" data-tama-quick="clean" data-tama-action="clean"><span class="tama-quick-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="19" y="2" width="4" height="4" fill="#8d633b"/><rect x="17" y="6" width="4" height="4" fill="#a87845"/><rect x="15" y="10" width="4" height="4" fill="#8d633b"/><rect x="13" y="14" width="4" height="4" fill="#a87845"/><rect x="11" y="18" width="4" height="4" fill="#8d633b"/><rect x="5" y="20" width="10" height="4" fill="#d5b477"/><rect x="3" y="24" width="14" height="4" fill="#c59a58"/><rect x="6" y="28" width="3" height="2" fill="#9d7542"/><rect x="11" y="28" width="3" height="2" fill="#9d7542"/></svg></span><strong>整理小窝</strong><small class="tama-quick-hint">保持窝里整洁</small></button>
+              <button type="button" class="tama-quick-action" data-tama-quick="warm" data-tama-action="warm"><span class="tama-quick-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="13" y="3" width="6" height="3" fill="#e9bd68"/><rect x="9" y="6" width="14" height="3" fill="#f7e5a4"/><rect x="7" y="9" width="18" height="11" fill="#ffedb2"/><rect x="10" y="20" width="12" height="3" fill="#e7bd6a"/><rect x="7" y="23" width="18" height="3" fill="#bd8a4e"/><rect x="4" y="25" width="24" height="3" fill="#d0a15c"/><rect x="9" y="27" width="14" height="3" fill="#8e6841"/><rect x="4" y="6" width="3" height="5" fill="#f0c86f"/><rect x="25" y="6" width="3" height="5" fill="#f0c86f"/><rect x="8" y="1" width="2" height="4" fill="#e4b95e"/><rect x="22" y="1" width="2" height="4" fill="#e4b95e"/></svg></span><strong>给窝保暖</strong><small class="tama-quick-hint">轻轻照看蛋窝</small></button>
+            </div>
+            <p class="tama-quick-feedback" id="tama-quick-feedback" aria-live="polite" hidden></p>
+          </section>
+          <div class="tama-panel-backdrop" id="tama-panel-backdrop" hidden>
+            <section class="tama-detail-panel" role="dialog" aria-modal="true" aria-labelledby="tama-panel-title">
+              <header><strong id="tama-panel-title">照顾记录</strong><button type="button" id="tama-panel-close" aria-label="关闭面板">×</button></header>
+              <div class="tama-detail-content" id="tama-panel-content"></div>
+              <small id="tama-panel-footnote">VIVI &amp; MORTIMER · LITTLE CHICK CLUB</small>
             </section>
           </div>
         </div>
