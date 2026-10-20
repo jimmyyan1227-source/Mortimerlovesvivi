@@ -1022,6 +1022,9 @@ html,body{width:100%;max-width:100%;}
 .music-lyric-line.is-current{padding-left:6px;border-left:3px solid #3986e0;background:linear-gradient(90deg,#dceeff,#f0f8ff);color:#255785;font-size:10px;font-weight:800;box-shadow:inset 0 1px 0 #fff}
 .music-lyrics-footer{min-height:23px;display:flex;align-items:center;justify-content:space-between;gap:4px;padding:4px 6px;border-top:1px solid #c2d8e9;background:linear-gradient(#f9fcff,#e3eff8);color:#7795ae;font-size:7px}
 .music-lyrics-footer strong{color:#4c83b5;font-size:7px;white-space:nowrap}
+.music-import-lyrics-button{flex-shrink:0;padding:2px 5px;border:1px solid #aab9c8;border-radius:4px;background:linear-gradient(180deg,#fff,#e0e7ee);color:#526b84;font:inherit;font-size:7px;font-weight:800;cursor:pointer;box-shadow:inset 0 1px 0 #fff}
+.music-import-lyrics-button:active{background:linear-gradient(180deg,#d7e0e8,#f5f7f9)}
+#music-lyrics-footer-note{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:390px){.notes-music-board{padding-bottom:10px}.music-player-framework{gap:9px}.music-middle-grid{grid-template-columns:minmax(78px,.31fr) minmax(0,1fr);gap:7px}.music-dock-button{min-height:36px;gap:5px;padding:4px 6px;font-size:10px}.music-dock-icon{width:20px;height:20px;flex-basis:20px;font-size:16px}.music-now-playing-body{padding:8px 7px 7px;gap:8px}.music-album-art{width:56px;height:56px;flex-basis:56px}.music-now-playing-main{gap:7px}.music-now-playing-copy strong{font-size:12px}.music-now-playing-copy time{font-size:10px}.music-player-controls button{width:22px;font-size:14px}.music-lower-grid{gap:6px}.music-recipient-row{gap:3px;padding:4px}.music-recipient-label{font-size:7px}.music-recipient-row>strong{font-size:8px}.music-recipient-row button{font-size:7px}.music-pager-frame{min-height:170px;margin:6px;padding:6px}.music-pager-message{font-size:9px}.music-lyric-line{font-size:8px;padding:3px 2px}.music-lyric-line.is-current{font-size:9px;padding-left:4px}.music-lyrics-titlebar strong{font-size:9px}.music-window-controls{gap:3px}.music-window-controls span{width:15px;height:15px;font-size:10px}.music-track-row{gap:5px;padding:4px}.music-track-main strong{font-size:10px}.music-row-volume-slider{width:31px;flex-basis:31px}.music-track-save{width:24px;flex-basis:24px}}
 @media(max-width:340px){.music-middle-grid{grid-template-columns:minmax(70px,.3fr) minmax(0,1fr);gap:6px}.music-dock-button{padding:4px;font-size:9px}.music-lower-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px}.music-pager-titlebar{font-size:8px;padding:4px 5px}.music-recipient-row{flex-wrap:wrap}.music-recipient-label{flex-basis:100%}.music-pager-frame{margin:5px;padding:5px}.music-pager-message{font-size:8px}.music-import-button{padding:0 8px}}
 
@@ -1258,3 +1261,124 @@ html,body{width:100%;max-width:100%;}
 .phone.music-board-active .music-dock-icon.game{font-size:17px!important}
 .phone.music-board-active .music-dock-icon.video{font-size:14px!important}
 .phone.music-board-active .music-dock-icon.audio{font-size:10px!important;letter-spacing:-2px}
+
+/* V14 Music interactions: compact playlist source button and a touch-scrollable catalogue. */
+.phone.music-board-active .music-catalog-toolbar{gap:5px!important}
+.phone.music-board-active .music-search-box{flex:1 1 auto;min-width:0}
+.phone.music-board-active .music-import-button{padding:0 9px!important;white-space:nowrap}
+.phone.music-board-active .music-playlist-button{
+  height:28px;flex:0 0 auto;padding:0 9px;border:1px solid #879bb0;border-radius:18px;
+  background:linear-gradient(180deg,#f0f3f6 0%,#d1dbe5 54%,#b4c3d2 100%);
+  box-shadow:inset 0 1px 0 #ffffffd9,0 1px 2px #44596e28;color:#304b66;
+  font-size:10px;font-weight:800;white-space:nowrap;cursor:pointer
+}
+.phone.music-board-active .music-playlist-button:active{background:linear-gradient(#b8c6d4,#e8edf2)}
+.phone.music-board-active .music-track-list{
+  max-height:180px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;
+  -webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#8499ae #d9e2ea
+}
+.phone.music-board-active .music-track-row[hidden]{display:none!important}
+.phone.music-board-active .music-main-progress{cursor:pointer;touch-action:pan-y;outline:none}
+.phone.music-board-active .music-main-progress:focus-visible{box-shadow:0 0 0 2px #91a4b8}
+.phone.music-board-active .music-player-controls button{cursor:pointer}
+.phone.music-board-active .music-track-play,.phone.music-board-active .music-track-save{cursor:pointer}
+.music-playlist-field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#40566d}
+.music-playlist-input{width:100%;min-width:0;min-height:36px;padding:8px 10px;border:1px solid #a5b5c6;border-radius:7px;background:linear-gradient(#fff,#edf1f5);color:#29445e;font:inherit;font-weight:500;outline:none}
+.music-playlist-input:focus{border-color:#7189a3;box-shadow:0 0 0 2px #7b8fa826}
+.music-playlist-hint{margin:0;color:#6f8297;font-size:11px;line-height:1.55}
+@media(max-width:390px){
+  .phone.music-board-active .music-catalog-toolbar{gap:4px!important;padding-left:6px!important;padding-right:6px!important}
+  .phone.music-board-active .music-playlist-button{padding:0 7px;font-size:9px}
+  .phone.music-board-active .music-import-button{padding:0 7px!important;font-size:10px}
+  .phone.music-board-active .music-search-box{padding:0 7px;gap:4px}
+}
+
+
+/* V15: playlist import and playlist selection are separate, equal-sized controls. */
+.phone.music-board-active .music-catalog-toolbar{gap:5px!important}
+.phone.music-board-active .music-import-button,
+.phone.music-board-active .music-playlist-button{
+  height:28px!important;min-height:28px!important;width:50px!important;flex:0 0 50px!important;
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  box-sizing:border-box!important;padding:0!important;gap:0!important;white-space:nowrap!important;
+  border:1px solid #879bb0!important;border-radius:18px!important;
+  background:linear-gradient(180deg,#f0f3f6 0%,#d1dbe5 54%,#b4c3d2 100%)!important;
+  box-shadow:inset 0 1px 0 #ffffffd9,0 1px 2px #44596e28!important;color:#304b66!important;
+  font-size:10px!important;font-weight:800!important;line-height:1!important;cursor:pointer!important;
+}
+.phone.music-board-active .music-import-button:active,
+.phone.music-board-active .music-playlist-button:active{background:linear-gradient(#b8c6d4,#e8edf2)!important}
+.phone.music-board-active .music-import-button .music-import-symbol{display:none!important}
+@media(max-width:390px){
+  .phone.music-board-active .music-catalog-toolbar{gap:4px!important}
+  .phone.music-board-active .music-import-button,
+  .phone.music-board-active .music-playlist-button{width:47px!important;flex-basis:47px!important;font-size:9px!important}
+}
+.music-playlist-hint{white-space:normal}
+.music-playlist-empty{padding:18px 10px;text-align:center;color:#6f8297;font-size:11px;line-height:1.6;border:1px dashed #aab8c7;border-radius:7px;background:linear-gradient(#f8fafb,#e6ecf2)}
+
+/* Mini-chat content occupies the original pager screen; outer geometry stays on V19 sizing. */
+.music-pager-chat{position:relative;z-index:1;display:flex;flex:1;min-height:0;flex-direction:column;gap:6px;overflow-y:auto;padding:2px 1px;scrollbar-width:thin;scrollbar-color:#a8b8ca transparent}
+.music-pager-chat .music-pager-message-row{max-width:94%;gap:0;margin:0}
+.music-pager-chat .bubble{padding:5px 7px;font-size:9px;line-height:1.35;border-radius:11px 11px 3px 11px;box-shadow:inset 0 1px 0 #ffffffd9,0 1px 2px #37465714}
+.music-pager-chat .received .bubble{border-radius:11px 11px 11px 3px}
+.music-pager-chat .message-meta{font-size:7px;margin:2px 3px 0}
+.music-pager-empty{margin:auto;text-align:center;color:#8b9daf;font-size:9px;line-height:1.5}
+.music-pager-input-row{flex:0 0 auto;align-items:center;min-height:22px;margin:4px 0 0;padding:3px 5px;border:1px solid #b5c5d6;border-radius:4px;background:linear-gradient(#fff,#e8eef5);color:#71859a}
+.music-pager-input-row input{width:0;min-width:0;flex:1;border:1px solid #c1cbd6;border-radius:3px;padding:4px 6px;background:#fff;color:#314b64;font-size:9px;outline-color:#8ca9c5}
+.music-pager-input-row input::placeholder{color:#a2acb8}
+.music-pager-input-row span{white-space:nowrap;font-size:7px}
+.music-recipient-label{flex:1;min-width:0;text-align:center}
+.music-recipient-row>strong{flex:.85;min-width:0}
+.music-recipient-row #music-send-card{flex:1;min-width:0;padding:5px 3px;border:1px solid #95b6e7;border-radius:4px;background:linear-gradient(#fff,#dae9ff);color:#346dae;font-size:8px;font-weight:800}
+@media(max-width:390px){.music-pager-chat .bubble{font-size:8px;padding:4px 6px}.music-pager-input-row{margin-top:3px;padding:3px 4px}}
+
+/* V22: keep the original pager geometry; the message history scrolls INSIDE its fixed screen. */
+.music-pager-window{min-height:0;}
+.music-pager-frame{
+  box-sizing:border-box;
+  height:180px;
+  min-height:0;
+  flex:0 0 180px;
+  justify-content:flex-start;
+  gap:6px;
+}
+.music-pager-chat{
+  box-sizing:border-box;
+  flex:1 1 0;
+  height:0;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+  -webkit-overflow-scrolling:touch;
+}
+.music-pager-input-row{flex:0 0 auto;}
+@media(max-width:390px){
+  .music-pager-frame{height:170px;flex-basis:170px;min-height:0;}
+}
+
+
+
+/* V23: exact three-slot pager header proportions; keep the middle and right slots equal. */
+.music-recipient-row{align-items:center!important;gap:4px!important}
+.music-recipient-row .music-recipient-label{box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;height:24px!important;min-height:24px!important;padding:0 3px!important;line-height:1!important;white-space:nowrap!important}
+.music-recipient-row>strong,
+.music-recipient-row #music-send-card{box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;height:28px!important;min-height:28px!important;padding:0 3px!important;line-height:1!important;white-space:nowrap!important}
+@media(max-width:390px){
+  .music-recipient-row{gap:3px!important}
+  .music-recipient-row .music-recipient-label{height:24px!important;min-height:24px!important}
+  .music-recipient-row>strong,
+  .music-recipient-row #music-send-card{height:27px!important;min-height:27px!important}
+}
+
+/* V25: compact the lower widgets without changing the surrounding player layout. */
+.music-track-select{flex:0 0 13px;width:13px;height:13px;margin:0 1px 0 0;accent-color:#5488b7;cursor:pointer}
+.music-track-row{gap:5px}
+.music-playlist-button:disabled{opacity:.45;cursor:not-allowed}
+.music-pager-frame{min-height:120px;gap:4px;margin:5px;padding:5px}
+.music-pager-chat{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain}
+.music-pager-actions{padding-top:0;padding-bottom:5px}
+.music-lyrics-scroll{min-height:110px;max-height:175px;padding:5px 6px;gap:3px}
+@media(max-width:390px){.music-pager-frame{min-height:115px;margin:5px;padding:4px}.music-lyrics-scroll{min-height:100px;max-height:155px;padding:4px}.music-pager-actions{padding-bottom:4px}}

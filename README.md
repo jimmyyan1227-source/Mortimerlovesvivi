@@ -1,10 +1,16 @@
-# Retro Otome — Music UI V13
+# Retro Otome V25
 
-Changes from V12:
-- Replaced the Home/Game/Video/Audio pictograms with restrained monochrome interface glyphs.
-- Replaced the search and import emoji with simple monochrome symbols.
-- Removed the lock/envelope emoji from the bottom-left message-card panel heading and replaced them with a compact typographic symbol.
-- Replaced the Lyrics Studio scroll emoji with a monochrome typographic mark.
-- Preserved the existing slate-blue palette and layout.
+本版基于 V24，重点完善备份、音乐列表批量管理和底部窗口留白。
 
-This update is a visual/icon pass; it does not add new playback behavior.
+## 变更
+- Me / Data & Settings 增加「Import backup / 导入备份」，可导入本项目 JSON 备份。导出内容包含应用状态，以及音乐歌单来源、收藏曲目 ID、当前歌单 ID。
+- 导入前会提示当前数据将被覆盖；导入后刷新页面。
+- 音乐列表增加每首歌的勾选框、「全选/取消全选」和「删除所选（数量）」；搜索后全选只作用于当前显示的曲目。
+- 批量删除会从当前列表以及已保存歌单中移除选中曲目，并更新计数。
+- 缩短 Lyrics Studio 歌词滚动区，并压缩左侧字卡显示框的最小高度、内部间距与底部留白；聊天内容继续在固定框内滚动。
+
+## 备份说明
+JSON 备份不包含浏览器生成的临时本地音频对象 URL；本地音频文件需要在导入备份后重新选择。在线歌单曲目信息与已保存的 LRC 文本会包含在音乐歌单数据中。
+
+## 检查
+`node --check app.js` 与 ZIP 完整性检查通过。尚未完成浏览器端到端视觉测试。

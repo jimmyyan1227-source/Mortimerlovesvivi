@@ -186,10 +186,11 @@
               </div>
               <div class="music-catalog-toolbar">
                 <label class="music-search-box"><span class="music-symbol-icon music-search-symbol" aria-hidden="true">⌕</span><input id="music-track-search" type="search" placeholder="Search audio file name…" aria-label="搜索音频文件名"></label>
-                <input type="file" id="music-audio-import-input" accept="audio/*" hidden>
-                <button type="button" class="music-import-button" id="music-audio-import"><span class="music-symbol-icon music-import-symbol" aria-hidden="true">⇧</span> 导入</button>
+                <input type="file" id="music-audio-import-input" accept="audio/*" multiple hidden>
+                <button type="button" class="music-import-button" id="music-audio-import" title="导入歌单或本地音频">导入</button><button type="button" class="music-playlist-button" id="music-select-all-tracks" title="全选/取消全选当前显示歌曲">全选</button><button type="button" class="music-playlist-button" id="music-delete-selected-tracks" disabled title="删除选中的歌曲">删除所选</button>
+                <button type="button" class="music-playlist-button" id="music-open-playlists" title="选择已经导入的歌单">歌单</button>
               </div>
-              <div class="music-track-list" id="music-track-list">
+              <div class="music-track-list" id="music-track-list" aria-label="歌曲列表，可上下滑动">
                 <div class="music-track-row is-active" data-track-title="Midnight Drive" data-track-artist="City Lights">
                   <button type="button" class="music-track-play" aria-label="播放 Midnight Drive">▶</button>
                   <div class="music-track-main"><strong>Midnight Drive</strong><div class="music-mini-progress"><span style="width:23%"></span><i style="left:23%"></i></div></div>
@@ -217,7 +218,7 @@
             <section class="music-middle-grid" aria-label="播放控制和正在播放">
               <nav class="music-dock" aria-label="音乐快捷入口">
                 <button type="button" class="music-dock-button"><span class="music-dock-icon home" aria-hidden="true">⌂</span><span>Home</span></button>
-                <button type="button" class="music-dock-button"><i class="music-ribbon ribbon-new">NEW</i><span class="music-dock-icon game" aria-hidden="true">✣</span><span>Game</span></button>
+                <button type="button" class="music-dock-button"><i class="music-ribbon ribbon-new">NEW</i><span class="music-dock-icon game" aria-hidden="true">✣</span><span>Play</span></button>
                 <button type="button" class="music-dock-button"><i class="music-ribbon ribbon-free">FREE</i><span class="music-dock-icon video" aria-hidden="true">▣</span><span>Video</span></button>
                 <button type="button" class="music-dock-button"><span class="music-dock-icon audio" aria-hidden="true">◖))</span><span>Audio</span></button>
               </nav>
@@ -228,9 +229,9 @@
                     <div class="music-album-art"><img id="music-album-image" src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200&amp;h=200&amp;fit=crop" alt="专辑封面"><span aria-hidden="true">♫</span></div>
                     <div class="music-now-playing-copy"><strong id="music-current-title">Midnight Drive</strong><span id="music-current-artist">City Lights</span><time id="music-current-time">00:00 / 04:35</time></div>
                   </div>
-                  <div class="music-main-progress"><span></span><i></i></div>
+                  <div class="music-main-progress" id="music-main-progress" role="slider" aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><span></span><i></i></div>
                   <div class="music-player-controls">
-                    <button type="button" aria-label="音量">◀))</button><button type="button" aria-label="上一首">|◀</button><button type="button" aria-label="播放或暂停" id="music-main-play">▶</button><button type="button" aria-label="下一首">▶|</button><button type="button" aria-label="播放列表">☷</button>
+                    <button type="button" aria-label="静音或恢复音量" id="music-volume-toggle">◖))</button><button type="button" aria-label="上一首" id="music-previous-track">|◀</button><button type="button" aria-label="播放或暂停" id="music-main-play">▶</button><button type="button" aria-label="下一首" id="music-next-track">▶|</button><button type="button" aria-label="选择歌单" id="music-open-playlists-shortcut">≡</button>
                   </div>
                 </div>
               </section>
@@ -239,13 +240,21 @@
             <section class="music-lower-grid" aria-label="字卡机和歌词">
               <article class="music-pager-window" aria-label="字卡留言面板">
                 <div class="music-pager-titlebar"><span class="music-pager-heading-symbol" aria-hidden="true">▤</span><span>메시지 &gt; SOHEE &gt; 보관 메시지</span></div>
-                <div class="music-recipient-row"><span class="music-recipient-label"><span aria-hidden="true">›</span> 받는 사람</span><strong>BRIIZE</strong><button type="button" id="music-send-card">✎ 发字卡</button></div>
-                <div class="music-pager-frame"><span class="music-pager-watermark">CYWORLD</span><div class="music-pager-message" id="music-pager-message">안녕! 今日份冬日暖风已投递。<br><br>听说你今天听着《Midnight Drive》在窗前发呆呢？外面冷，记得把围巾系好。字卡柜里存着我们交换过的所有旋律，每一张都在默默发光。☆</div><div class="music-pager-stamp"><span>2026.10.19 MON</span><span>(77 / 400)</span></div></div>
-                <div class="music-pager-actions"><button type="button">✉+ 다음 메시지</button><button type="button">이전 메시지 ✉+</button></div>
+                <div class="music-recipient-row">
+                  <span class="music-recipient-label">&gt; Mortimer</span>
+                  <strong>BRIZE</strong>
+                  <button type="button" id="music-send-card">받는 사람</button>
+                </div>
+                <div class="music-pager-frame">
+                  <span class="music-pager-watermark">MORTIMER</span>
+                  <div class="music-pager-chat" id="music-pager-chat" aria-live="polite"><div class="music-pager-empty">여기에 메시지가 표시됩니다</div></div>
+                  <div class="music-pager-stamp music-pager-input-row"><input type="text" id="music-pager-input" maxlength="1200" placeholder="输入你想说的话……" aria-label="输入消息"><span id="music-pager-char-count">0 / 1200</span></div>
+                </div>
+                <div class="music-pager-actions"><button type="button" id="music-ask-mortimer">✉+ 다음 메시지</button><button type="button" id="music-send-vivi">이전 메시지 ✉+</button></div>
               </article>
               <article class="music-lyrics-window" aria-label="歌词工作室">
                 <div class="music-lyrics-titlebar"><strong><span class="music-lyrics-heading-symbol" aria-hidden="true">≡</span> Lyrics Studio</strong><div class="music-window-controls" aria-hidden="true"><span>_</span><span>×</span></div></div>
-                <div class="music-lyrics-subbar"><span id="music-lyrics-song-name">♪ Midnight Drive</span><span>● 同步待命</span></div>
+                <div class="music-lyrics-subbar"><span id="music-lyrics-song-name">Midnight Drive</span><span id="music-lyrics-status">歌词待命</span></div>
                 <div class="music-lyrics-scroll" id="music-lyrics-scroll">
                   <div class="music-lyric-line">♪ [Intro — Nostalgic Synth] ♪</div>
                   <div class="music-lyric-line">车窗外流过的霓虹光晕</div>
@@ -255,7 +264,7 @@
                   <div class="music-lyric-line">♪ [Outro — Fading Echoes] ♪</div>
                   <div class="music-lyric-line">如果时光能像磁带倒带</div>
                 </div>
-                <div class="music-lyrics-footer"><span>点击任意行跳转播放</span><strong>SYNC 2004</strong></div>
+                <div class="music-lyrics-footer"><span id="music-lyrics-footer-note">本地 LRC 时间轴同步 · 支持批量导入</span><button type="button" id="music-import-lyrics-button" class="music-import-lyrics-button" title="一次选择多首歌曲的 LRC 文件，自动按文件名匹配">批量导入 LRC</button><input type="file" id="music-lyrics-file" accept=".lrc,.txt,text/plain" multiple hidden><strong>SYNC</strong></div>
               </article>
             </section>
           </div>
@@ -337,7 +346,7 @@
           <div class="custom-card-list" id="custom-card-list"></div>
         </div>
         <div class="me-section-title custom-heading">DATA & SETTINGS</div>
-        <button class="setting-row" id="export-data"><span>Export local data / 导出数据</span><span>JSON　›</span></button><button class="setting-row" id="reset-data"><span>Reset demo / 重置数据</span><span>›</span></button>
+        <button class="setting-row" id="export-data"><span>Export local data / 导出完整备份</span><span>JSON　›</span></button><button class="setting-row" id="import-data"><span>Import backup / 导入备份</span><span>JSON　›</span></button><input type="file" id="import-data-file" accept=".json,application/json" hidden><button class="setting-row" id="reset-data"><span>Reset demo / 重置数据</span><span>›</span></button>
         <p class="settings-note">记录保存在当前浏览器中。此 Demo 的电话、视频和 Contact 按钮仅为交互演示，不会发起真实通话或支付。</p>
       </section>
     </div>
